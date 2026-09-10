@@ -206,15 +206,19 @@ function loop(now){
 }
 requestAnimationFrame(loop);
 function jump(){ if(st==='play'){ rabbit.v=JUMP; sfx.jump(); puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3); } }
-function tap(e){ if(st==='menu'||st==='dead')return; jump(); e&&e.preventDefault&&e.preventDefault(); }
+function tap(e){ if(st==='pause'){resume();e&&e.preventDefault&&e.preventDefault();return;} if(st==='menu'||st==='dead')return; jump(); e&&e.preventDefault&&e.preventDefault(); }
 cvs.addEventListener('mousedown',tap);
 cvs.addEventListener('touchstart',tap,{passive:false});
-addEventListener('keydown',e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); if(st==='menu')startGame(); else if(st==='dead')retry(); else jump(); } });
+addEventListener('keydown',e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); if(st==='menu')startGame(); else if(st==='dead')retry(); else if(st==='pause')resume(); else jump(); } });
 function startGame(){ reset(); st='play'; startScreen.style.display='none'; overScreen.style.display='none'; hud.style.display='flex'; spawnBamboo(); }
+function pauseGame(){ if(st!=='play')return; st='pause'; comboEl.textContent='暂 停 · 点击继续'; comboEl.classList.add('show'); }
+function resume(){ if(st!=='pause')return; st='play'; comboEl.classList.remove('show'); }
+document.addEventListener('visibilitychange',()=>{ if(document.hidden)pauseGame(); });
 function showOver(){
   hud.style.display='none';
-  if(score>best){best=score;saveBest(best);}
-  $('overStats').innerHTML='本次 <b style="color:#e8c040">'+score+'</b> 分<br>最高 '+best;
+  const isBest=score>best&&score>0;
+  if(isBest){best=score;saveBest(best);$('startBest').textContent='最高分 '+best;}
+  $('overStats').innerHTML=(isBest?'<span style="color:#e8c040;letter-spacing:4px">✦ 新 纪 录 ✦</span><br>':'')+'本次 <b style="color:#e8c040">'+score+'</b> 分<br>最高 '+best;
   overScreen.style.display='flex';
 }
 function retry(){ overScreen.style.display='none'; startGame(); }
@@ -223,6 +227,7 @@ $('retryBtn').addEventListener('click',retry);
 function fit(){ const s=Math.min(innerWidth/W,innerHeight/H); cvs.style.width=(W*s)+'px'; cvs.style.height=(H*s)+'px'; }
 addEventListener('resize',fit); fit();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+window.__motu={ get state(){return st}, get score(){return score}, get best(){return best}, jump(){ if(st==='play')jump(); else if(st==='menu')startGame(); } };
 })();
 </script>
 </body>

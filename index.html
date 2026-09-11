@@ -135,6 +135,7 @@ let bamboo=[],pickups=[],particles=[],clouds=[],stars=[],fireflies=[],lanterns=[
 let score=0,lastSpawn=0,shake=0,dayPhase=0,invincible=0,frame=0;
 let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0;
 let gameSpeed=1,speedBurst=0;
+let __eyeBoost=0; // P229: 兔子瞳孔放大系数（吃币/珍珠瞬间触发）
 // P217: 节气系统 v1.7 — 每40分换季，特效粒子+季节玩法
 const SEASONS=[
   {name:'春',part:'petal',pc:'#f0a8b8',sky:['#c8d8c0','#e8dfe8']},
@@ -287,11 +288,11 @@ function update(dt,now){
     }
     const dx=p.x-rabbit.x,dy=p.y-rabbit.y;
     if(dx*dx+dy*dy<(RR+11)*(RR+11)){
-      if(p.kind==='coin'){comboN++;comboTimer=90;let gain=1+Math.floor(comboN/5);if(doubleCoinTimer>0)gain*=2;score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);
+      if(p.kind==='coin'){comboN++;comboTimer=90;let gain=1+Math.floor(comboN/5);if(doubleCoinTimer>0)gain*=2;score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);__eyeBoost=60;if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);
         // P217: 15连击 → 墨韵爆发，清屏+额外分
         if(comboN===15&&bamboo.length>0){let clearN=bamboo.length;bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',6));bamboo=[];score+=clearN*2;scoreTxt.textContent=score;showCombo('✦ 墨 韵 爆 发 ✦ 清'+clearN+'竹');sfx.burst();vib([60,40,100]);shake=14;/* P228: 15连击金币雨 */spawnCoinRain(rabbit.x,rabbit.y);}
       }
-      else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');showCombo('墨珠 +5');addSkill(8);}
+      else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');__eyeBoost=45;showCombo('墨珠 +5');addSkill(8);}
       else if(p.kind==='shield'){rabbit.shield=Math.min(3,rabbit.shield+1);sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身·'+rabbit.shield+'层');addSkill(5);}
       else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=90;addSkill(5);}
       else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=Math.max(rabbit.shield,1);invincible=120;}
@@ -301,6 +302,7 @@ function update(dt,now){
   }
   if(comboTimer>0){comboTimer-=dt;if(comboTimer<=0)comboN=0;}
   if(invincible>0&&burstTimer<=0){invincible-=dt;if(invincible<0)invincible=0;}
+  if(__eyeBoost>0){__eyeBoost-=dt;if(__eyeBoost<0)__eyeBoost=0;}
   for(let i=magLines.length-1;i>=0;i--){const m=magLines[i];m.life-=dt;if(m.life<=0)magLines.splice(i,1);}
   for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx*dt;q.y+=q.vy*dt;if(!q.txt)q.vy+=.12*dt;q.life-=dt;if(q.life<=0)particles.splice(i,1);}
   // P222: 冲击波推进
@@ -632,6 +634,15 @@ function draw(){
       ctx.beginPath();ctx.moveTo(b.x,b.gapY+b.gap/2);ctx.lineTo(b.x+b.w,b.gapY+b.gap/2);ctx.stroke();
       ctx.setLineDash([]);
     }
+    // P229: move 竹子飘叶效果 —— 落叶随风轻扬
+    if(b.move){
+      for(let l=0;l<3;l++){
+        const leafX=b.x+b.w+4+l*8,leafY=b.gapY-b.gap/2-(Math.sin(frame*.003+b.ph)*4+l*12)+Math.sin(frame*.007+b.ph+l)*3;
+        ctx.fillStyle='rgba(55,85,40,'+(.45+Math.sin(performance.now()*.002)*.1)+')';
+        ctx.beginPath();ctx.ellipse(leafX,leafY,4+l*1.5,2.5+l*.5,0,0,6.2832);ctx.fill();
+        ctx.strokeStyle='rgba(60,50,30,.3)';ctx.lineWidth=.5;ctx.stroke();
+      }
+    }
   });
 
   // 道具 (P218: 质感升级)
@@ -724,20 +735,21 @@ function draw(){
     // 大头（二头身，可爱）
     const hg=ctx.createRadialGradient(-3,-4,2,0,0,RR+1);hg.addColorStop(0,'#fffaf0');hg.addColorStop(.7,'#efe6d8');hg.addColorStop(1,'#c0b5a2');
     ctx.fillStyle=hg;ctx.beginPath();ctx.arc(2,-3,RR*.82,0,6.2832);ctx.fill();ctx.stroke();
-    // 眼：大而灵动 + 眨眼（每约3.4秒眨一次）+ 双高光
+    // 眼：大而灵动 + 眨眼（每约3.4秒眨一次）+ 双高光 + 吃币瞬间瞳孔放大
+    const eyeMulti=1+Math.max(0,Math.min(.3,__eyeBoost/60));
     const blink=(now%3400)<130;
     if(blink){
       ctx.strokeStyle='#241d17';ctx.lineWidth=1.6;
-      ctx.beginPath();ctx.arc(6,-5,3.2,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
-      ctx.beginPath();ctx.arc(12.5,-4,2.6,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
+      ctx.beginPath();ctx.arc(6,-5,3.2*eyeMulti,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
+      ctx.beginPath();ctx.arc(12.5,-4,2.6*eyeMulti,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
     } else {
       ctx.fillStyle='#241d17';
-      ctx.beginPath();ctx.ellipse(6,-5,2.7,3.3,0,0,6.2832);ctx.fill();
-      ctx.beginPath();ctx.ellipse(12.5,-4,2.1,2.7,0,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.ellipse(6,-5,2.7*eyeMulti,3.3,0,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.ellipse(12.5,-4,2.1*eyeMulti,2.7,0,0,6.2832);ctx.fill();
       ctx.fillStyle='#fff';
-      ctx.beginPath();ctx.arc(6.8,-6.2,1.05,0,6.2832);ctx.fill();
-      ctx.beginPath();ctx.arc(5.4,-4,0.55,0,6.2832);ctx.fill();
-      ctx.beginPath();ctx.arc(13.2,-5,0.8,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.arc(6.8,-6.2,1.05*eyeMulti,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.arc(5.4,-4,0.55*eyeMulti,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.arc(13.2,-5,0.8*eyeMulti,0,6.2832);ctx.fill();
     }
     // 腮红 + 鼻子 + 嘴
     ctx.fillStyle='rgba(240,150,150,.4)';ctx.beginPath();ctx.ellipse(4.5,1.5,2.6,1.6,0,0,6.2832);ctx.fill();ctx.beginPath();ctx.ellipse(14,2,2.1,1.4,0,0,6.2832);ctx.fill();

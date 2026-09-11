@@ -191,7 +191,8 @@ function takeHit(){
 function spawnBamboo(){
   const D=diff();
   // P220: gapY 边界校准 — 保证上下各保留 70px 空隙给玩家安全区域
-  const gapY=Math.max(80, Math.min(H-100, 90+Math.random()*(H-250-D.gap)));
+  // P227:  gapY 围绕兔子初始位置分布（约 H*0.38 ~ H*0.58），绝不让首根竹卡在兔子上方
+  const gapY=Math.max(60, Math.min(H-100, H*0.38+Math.random()*(H*0.22-D.gap)));
   const isDouble=score>=25&&Math.random()<Math.min(.2,(score-25)*0.005);
   if(isDouble){
     const subGap=60+Math.random()*70;
@@ -222,13 +223,13 @@ function spawnBamboo(){
 }
 
 // ============ 更新 ============
-// P223: 物理改为 dt 驱动（dt=本帧耗时/16.67ms，钳制2.5防跳帧）——帧率波动不再影响速度
+// P223: 物理改为 dt 驱动（dt=本帧耗时/16.667ms，钳制2.5防跳帧）——帧率波动不再影响速度
 function update(dt,now){
   const D=diff();
   frame+=dt;   // 全局帧计数，供动画/节气等依赖
   // P225: 墨迹轨迹（兔子移动时持续输出脚印）
   pushInkTrail();
-  // P225: 磁铁道具效果——若兔子在币群密集区（120px 内有 ≥3 枚 coin），自动把币吸过来
+  // P225: 磁铁道具效果——若兔子在币群密集区，自动把币吸过来
   if(st==='play'){
     for(let i=pickups.length-1;i>=0;i--){
       const p=pickups[i];
@@ -927,6 +928,7 @@ function showOver(){
 }
 function retry(){overScreen.style.display='none';startGame();}
 $('startBtn').addEventListener('click',startGame);
+$('startBtn').addEventListener('touchstart',(e)=>{e.stopPropagation();e.preventDefault();startGame();},false);
 $('retryBtn').addEventListener('click',retry);
 
 // P223: fit 同步 DPR — 高分屏清晰，且窗口变化时重建 backing store

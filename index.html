@@ -230,6 +230,8 @@ function update(dt,now){
   frame+=dt;   // 全局帧计数，供动画/节气等依赖
   // P225: 墨迹轨迹（兔子移动时持续输出脚印）
   pushInkTrail();
+  // P230: 跳跃残影（每帧记录）
+  pushGhost();
   // P225: 磁铁道具效果——若兔子在币群密集区，自动把币吸过来
   if(st==='play'){
     for(let i=pickups.length-1;i>=0;i--){
@@ -251,7 +253,13 @@ function update(dt,now){
   if(speedBurst>0){speedBurst-=dt;if(speedBurst<0)speedBurst=0;}
   if(doubleCoinTimer>0)doubleCoinTimer-=dt;
   if(lowGravTimer>0)lowGravTimer-=dt;
+  const __pv=rabbit.v;
   rabbit.v+=(lowGravTimer>0?G*0.5:G)*dt;rabbit.y+=rabbit.v*dt;
+  // P230: 跳跃顶点（v由负转正）放墨圈+小墨点，强化跳跃手感
+  if(__pv<0&&rabbit.v>=0&&rabbit.y<H-40){
+    ripple(rabbit.x,rabbit.y,'rgba(140,130,120,.5)');
+    puff(rabbit.x,rabbit.y,'#4a453f',3);
+  }
   rabbit.rot=Math.max(-.5,Math.min(1.1,rabbit.v*.06));
   if(rabbit.y<RR){rabbit.y=RR;rabbit.v=0;}
   if(rabbit.y>H-RR){
@@ -350,6 +358,20 @@ function spawnCoinRain(x,y){
   for(let i=0;i<18;i++){
     const ang=Math.random()*6.28,dist=20+Math.random()*40;
     coinRain.push({x:x+Math.cos(ang)*dist,y:y+Math.sin(ang)*dist,vy:0.8+Math.random()*.4,life:180,i:Math.floor(Math.random()*40),col:'#e8c040'});
+  }
+}
+// P230: 跳跃残影 —— 跑动中兔子身后 3 帧虚影，增强动作感
+let ghostTrail=[];
+function pushGhost(){if(st!=='play')return;ghostTrail.push({x:rabbit.x,y:rabbit.y,rot:rabbit.rot,life:7});if(ghostTrail.length>8)ghostTrail.shift();}
+function drawGhosts(){
+  for(let i=ghostTrail.length-1;i>=0;i--){
+    const g=ghostTrail[i];g.life-=1;if(g.life<=0){ghostTrail.splice(i,1);continue;}
+    const a=g.life/7;
+    ctx.save();ctx.globalAlpha=a*.22;
+    ctx.translate(g.x,g.y);ctx.rotate(g.rot);
+    const bg=ctx.createRadialGradient(-3,-5,1,0,0,RR+3);bg.addColorStop(0,'#faf0d8');bg.addColorStop(1,'rgba(60,55,50,0)');
+    ctx.fillStyle=bg;ctx.beginPath();ctx.arc(0,0,RR,0,6.2832);ctx.fill();
+    ctx.restore();
   }
 }
 // 若玩家连击≥15，死亡时绽放火焰尾羽（墨韵爆发余晖）
@@ -683,6 +705,7 @@ function draw(){
   });
 
   // 兔子 + 轨迹
+  drawGhosts();
   if(st==='play'||st==='dead'){
     // P225: 墨迹轨迹画在兔子下面（世界坐标，需在 translate 前）
     if(st==='play')drawInkTrail();
@@ -716,6 +739,14 @@ function draw(){
     } else if(rabbit.shield<=0){hudShield.textContent='';}
     const lean=Math.max(-.5,Math.min(.5,-rabbit.v*.05));
     const now=performance.now();
+    // P230: 冲刺拖影 —— 萝卜加速时身后拉出墨色速度线
+    if(speedBurst>0){
+      const sp=Math.min(1,speedBurst/90);
+      ctx.save();ctx.globalAlpha=sp*.5;ctx.strokeStyle='#3a3530';ctx.lineWidth=1.5;ctx.lineCap='round';
+      for(let i=0;i<5;i++){const yy=-10+i*5,len=14+sp*16+Math.sin(now*.02+i)*4;
+        ctx.beginPath();ctx.moveTo(-RR-2,yy);ctx.lineTo(-RR-2-len,yy);ctx.stroke();}
+      ctx.restore();
+    }
     // P223: 兔子重绘 — 大头二头身、灵动大眼、会眨眼、耳朵摇摆、腮红、软投影，可爱+质感
     // 落地软影
     ctx.save();ctx.globalAlpha=.16;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,RR+6,RR*.95,3.5,0,0,6.2832);ctx.fill();ctx.restore();

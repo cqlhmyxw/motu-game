@@ -113,7 +113,8 @@ function reset(){
   for(let i=0;i<30;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.55,tw:Math.random()*6.28,s:0.4+Math.random()*1.2});
   for(let i=0;i<8;i++) fireflies.push({x:Math.random()*W,y:60+Math.random()*260,ph:Math.random()*6.28,s:0.3+Math.random()*0.8,r:1.5+Math.random()*2});
   score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;
-  scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';
+  scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';
+  skillBar.style.background='linear-gradient(90deg,#c8a870,#e8c040)';
 }
 function diff(){
   const d=Math.min(score,80);
@@ -124,11 +125,25 @@ function diff(){
 }
 function hasShield(){return rabbit&&rabbit.shield}
 
+function takeHit(){
+  if(burstTimer>0||invincible>0)return true;
+  if(hasShield()){
+    rabbit.shield=false;
+    invincible=120;              // P216: 护盾触发给 2 秒无敌，足够穿过整根竹子
+    rabbit.v=-6.2;               // P216: 反弹跳起，脱离碰撞区
+    sfx.pearl();vib(20);
+    puff(rabbit.x,rabbit.y,'#e8c040',14);
+    showCombo('符纸挡伤');
+    return true;
+  }
+  return false;
+}
+
 // ============ 生成 ============
 function spawnBamboo(){
   const D=diff();
   const gapY=90+Math.random()*(H-180-D.gap);
-  const isDouble=score>=50&&Math.random()<Math.min(.18,(score-50)*0.004);
+  const isDouble=score>=25&&Math.random()<Math.min(.2,(score-25)*0.005);
   if(isDouble){
     const subGap=60+Math.random()*70;
     const subY=gapY+gapY/2+(Math.random()-.5)*80;
@@ -138,12 +153,15 @@ function spawnBamboo(){
     bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:D.gap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false});
   }
   if(st==='play'){
+    // P215: 前3根竹子保底出 符纸→灵草→萝卜，让新道具一定被看到
+    const forced=['shield','herb','radish'][Math.min(score,2)];
+    if(score<3&&forced){ pickups.push({x:W+40+26,y:gapY+D.gap/2,kind:forced,ph:0}); }
     const r=Math.random();
-    if(r<.52){ for(let i=0;i<3;i++) pickups.push({x:W+40+26,y:gapY+D.gap/2+(i-1)*34,kind:'coin',ph:Math.random()*6}); }
-    else if(r<.70){ pickups.push({x:W+40+26,y:gapY-46,kind:'pearl',ph:0}); }
-    else if(r<.82){ pickups.push({x:W+40+26,y:gapY+D.gap/2,kind:'shield',ph:0}); }
-    else if(r<.93){ pickups.push({x:W+40+26,y:gapY-30,kind:'radish',ph:0}); }
-    else if(r<1){ pickups.push({x:W+40+26,y:gapY+D.gap/2-20,kind:'herb',ph:0}); }
+    if(score>=3&&r<.44){ for(let i=0;i<3;i++) pickups.push({x:W+40+26,y:gapY+D.gap/2+(i-1)*34,kind:'coin',ph:Math.random()*6}); }
+    else if(r<.60){ pickups.push({x:W+40+26,y:gapY-46,kind:'pearl',ph:0}); }
+    else if(r<.74){ pickups.push({x:W+40+26,y:gapY+D.gap/2,kind:'shield',ph:0}); }
+    else if(r<.87){ pickups.push({x:W+40+26,y:gapY-30,kind:'radish',ph:0}); }
+    else { pickups.push({x:W+40+26,y:gapY+D.gap/2-20,kind:'herb',ph:0}); }
   }
 }
 
@@ -159,18 +177,20 @@ function update(dt,now){
   rabbit.v+=G;rabbit.y+=rabbit.v;
   rabbit.rot=Math.max(-.5,Math.min(1.1,rabbit.v*.06));
   if(rabbit.y<RR){rabbit.y=RR;rabbit.v=0;}
-  if(rabbit.y>H-RR){hit();return;}
+  if(rabbit.y>H-RR){
+    rabbit.y=H-RR;
+    if(!takeHit()){hit();return;}
+    rabbit.v=-3.2; // P215: 护盾/无敌触发后弹离底部，避免下一帧重复撞击
+  }
   lastSpawn+=D.speed;
   if(lastSpawn>D.interval+60){lastSpawn=0;spawnBamboo();}
   for(let i=bamboo.length-1;i>=0;i--){
     const b=bamboo[i];b.x-=D.speed;
     if(b.move){const minY=70+b.gap/2,maxY=H-70-b.gap/2;b.gapY+=Math.sin((now||performance.now())*.002+b.ph)*.7;if(b.gapY<minY)b.gapY=minY;if(b.gapY>maxY)b.gapY=maxY;}
-    if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=(score%40)/40;}
+    if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=Math.min(1,(score%50)/40);}
     if(rabbit.x+RR>b.x&&rabbit.x-RR<b.x+b.w){
       if(rabbit.y-RR<b.gapY-b.gap/2||rabbit.y+RR>b.gapY+b.gap/2){
-        if(burstTimer>0||invincible>0){}
-        else if(hasShield()){rabbit.shield=false;invincible=24;sfx.pearl();puff(rabbit.x,rabbit.y,'#e8c040',14);}
-        else{hit();return;}
+        if(!takeHit()){hit();return;}   // P215: 统一护盾/无敌判定
       }
     }
     if(b.x+b.w<-30)bamboo.splice(i,1);
@@ -183,7 +203,7 @@ function update(dt,now){
       else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');showCombo('墨珠 +5');addSkill(8);}
       else if(p.kind==='shield'){rabbit.shield=true;sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身');addSkill(5);}
       else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=90;addSkill(5);}
-      else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=true;invincible=60;}
+      else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=true;invincible=120;}
       pickups.splice(i,1);continue;
     }
     if(p.x<-20)pickups.splice(i,1);

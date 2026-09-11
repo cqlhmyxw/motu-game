@@ -154,7 +154,7 @@ function reset(){
   for(let i=0;i<4;i++) clouds.push({x:Math.random()*W,y:40+Math.random()*160,s:.15+Math.random()*.2,w:60+Math.random()*80});
   for(let i=0;i<30;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.55,tw:Math.random()*6.28,s:0.4+Math.random()*1.2});
   for(let i=0;i<8;i++) fireflies.push({x:Math.random()*W,y:60+Math.random()*260,ph:Math.random()*6.28,s:0.3+Math.random()*0.8,r:1.5+Math.random()*2});
-  score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;
+  score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;__craneAt=0;
   season=0;seasonParts=[];blessTimer=0;trail=[];
   menuBamboo=[];menuSparkles=[];__menuTick=0;inkTrail=[];magLines=[];   // P225: 清理菜单装饰+墨迹+磁铁线
   scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';hudShield.textContent='';
@@ -254,10 +254,13 @@ function update(dt,now){
   rabbit.rot=Math.max(-.5,Math.min(1.1,rabbit.v*.06));
   if(rabbit.y<RR){rabbit.y=RR;rabbit.v=0;}
   if(rabbit.y>H-RR){
+    // P228: 落地墨点涟漪 —— 首次着地（此前在空中）才触发
+    if(!rabbit.onGround){rabbit.onGround=true;ripple(rabbit.x,H-RR+4,'rgba(60,60,65,.5)');}
     rabbit.y=H-RR;
     if(!takeHit()){hit();return;}
     rabbit.v=-3.2; // P215: 护盾/无敌触发后弹离底部，避免下一帧重复撞击
-  }
+    rabbit.onGround=false;
+  } else if(rabbit.y<H-RR||rabbit.v<0){rabbit.onGround=false;}
   lastSpawn+=D.speed*dt;
   if(lastSpawn>D.interval+60){lastSpawn=0;spawnBamboo();}
   for(let i=bamboo.length-1;i>=0;i--){
@@ -286,7 +289,7 @@ function update(dt,now){
     if(dx*dx+dy*dy<(RR+11)*(RR+11)){
       if(p.kind==='coin'){comboN++;comboTimer=90;let gain=1+Math.floor(comboN/5);if(doubleCoinTimer>0)gain*=2;score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);
         // P217: 15连击 → 墨韵爆发，清屏+额外分
-        if(comboN===15&&bamboo.length>0){let clearN=bamboo.length;bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',6));bamboo=[];score+=clearN*2;scoreTxt.textContent=score;showCombo('✦ 墨 韵 爆 发 ✦ 清'+clearN+'竹');sfx.burst();vib([60,40,100]);shake=14;}
+        if(comboN===15&&bamboo.length>0){let clearN=bamboo.length;bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',6));bamboo=[];score+=clearN*2;scoreTxt.textContent=score;showCombo('✦ 墨 韵 爆 发 ✦ 清'+clearN+'竹');sfx.burst();vib([60,40,100]);shake=14;/* P228: 15连击金币雨 */spawnCoinRain(rabbit.x,rabbit.y);}
       }
       else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');showCombo('墨珠 +5');addSkill(8);}
       else if(p.kind==='shield'){rabbit.shield=Math.min(3,rabbit.shield+1);sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身·'+rabbit.shield+'层');addSkill(5);}
@@ -328,10 +331,25 @@ function activateBurst(){
   shockwaves.push({x:rabbit.x,y:rabbit.y,r:RR,life:1,col:'#ff9a3a'});
   shockwaves.push({x:rabbit.x,y:rabbit.y,r:4,life:1,col:'#ffd766'});
   flashEl.classList.add('on');setTimeout(()=>flashEl.classList.remove('on'),90);
+  /* P228: 爆气金币雨 */
+  coinRain=[];
+  for(let i=0;i<18;i++){
+    const ang=Math.random()*6.28,dist=20+Math.random()*40;
+    coinRain.push({x:rabbit.x+Math.cos(ang)*dist,y:rabbit.y+Math.sin(ang)*dist,vy:0.8+Math.random()*.4,life:180,i:Math.floor(Math.random()*40),col:'#e8c040'});
+  }
   showCombo('★ 爆 气 全 开 ★');
 }
 
 // P227: 死亡墨花 —— 失败也有一朵完整的墨花绽放（比黑爆有仪式感）
+// P228: 爆气/15连击金币雨
+let coinRain=null;
+function spawnCoinRain(x,y){
+  coinRain=[];
+  for(let i=0;i<18;i++){
+    const ang=Math.random()*6.28,dist=20+Math.random()*40;
+    coinRain.push({x:x+Math.cos(ang)*dist,y:y+Math.sin(ang)*dist,vy:0.8+Math.random()*.4,life:180,i:Math.floor(Math.random()*40),col:'#e8c040'});
+  }
+}
 // 若玩家连击≥15，死亡时绽放火焰尾羽（墨韵爆发余晖）
 let doomBloom=null;
 function spawnDoomBloom(x,y){
@@ -420,6 +438,38 @@ function drawMenuFx(now){
   }
   ctx.globalAlpha=1;
 }
+// P228: 落地墨点涟漪 & 云中鹤飞掠
+let ripples=[];
+function ripple(x,y,col){
+  ripples.push({x,y,r:3,life:16,col});
+  if(ripples.length>6)ripples.shift();
+}
+function drawRipples(){
+  for(let i=ripples.length-1;i>=0;i--){
+    const rp=ripples[i];rp.life--;if(rp.life<=0){ripples.splice(i,1);continue;}
+    rp.r+=1.6;
+    ctx.save();ctx.globalAlpha=rp.life/16*.6;
+    ctx.strokeStyle=rp.col;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.ellipse(rp.x,rp.y,rp.r,rp.r*.45,0,0,6.28);ctx.stroke();
+    ctx.beginPath();ctx.ellipse(rp.x,rp.y,rp.r*.55,rp.r*.25,0,0,6.28);ctx.stroke();
+    ctx.restore();
+  }
+}
+let crane=null,__craneAt=0;
+function spawnCrane(){crane={x:-60,y:60+Math.random()*100,phase:0,life:380};}
+function drawCrane(){
+  if(!crane)return;
+  crane.life--;crane.x+=1.7;crane.phase+=.09;
+  crane.y+=Math.sin(crane.phase*.6)*.35;
+  if(crane.life<=0||crane.x>W+70){crane=null;return;}
+  const flap=Math.sin(crane.phase)*10;
+  ctx.save();ctx.globalAlpha=.55;
+  ctx.translate(crane.x,crane.y);
+  ctx.strokeStyle='#f2ede0';ctx.lineWidth=2.6;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(-13,flap*.5);ctx.quadraticCurveTo(-5,-3,0,0);ctx.quadraticCurveTo(5,-3,13,flap*.5);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(6,2,9,-4);ctx.stroke();
+  ctx.restore();
+}
 let magLines=[];
 function addMagLine(x1,y1,x2,y2){magLines.push({x1,y1,x2,y2,life:8});}
 // P225: 墨迹轨迹 —— 兔子脚底的水墨尾迹（无论季节，都能看到跑路的痕迹）
@@ -444,6 +494,9 @@ function drawInkTrail(){
 function updateSeasonFx(now,dt){
   dt=dt||1;
   advanceSeason();
+  // P228: 每50分触发云中鹤飞掠（50、100、150...）用区间避免跳分漏触发
+  const z=Math.floor(score/50);
+  if(z>0&&z!==__craneAt){__craneAt=z;if(!crane)spawnCrane();}
   if(blessTimer>0){blessTimer-=dt;if(blessTimer<0)blessTimer=0;}
   trail.push({x:rabbit.x-8,y:rabbit.y+10,life:18,col:SEASONS[season].pc});
   if(trail.length>18)trail.shift();
@@ -494,9 +547,14 @@ function draw(){
   const stops=[[100,108,140],[168,176,200],[200,205,215],[60,58,80]];
   const f=dayPhase*4,i=f|0,k=f-i;
   const a=stops[i%4],b=stops[(i+1)%4];
-  const sky='rgb('+a.map((v,j)=>Math.round(v+(b[j]-v)*k)).join(',')+')';
+  let sky='rgb('+a.map((v,j)=>Math.round(v+(b[j]-v)*k)).join(',')+')';
   const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,sky);g.addColorStop(1,'#1a1815');
   ctx.fillStyle=g;ctx.fillRect(-20,-20,W+40,H+40);
+  // P228: 季节染色层 — 用每个季节的 sky 色系给天空叠一层透明的季节调，随 frame 缓慢浮动
+  const sq=SEASONS[season].sky;
+  ctx.save();ctx.globalAlpha=.06+Math.sin(frame*.005)*.02;
+  const sg=ctx.createLinearGradient(0,0,0,H);sg.addColorStop(0,sq[0]);sg.addColorStop(1,sq[1]);
+  ctx.fillStyle=sg;ctx.fillRect(-20,-20,W+40,H+40);ctx.restore();
 
   // 远景山峦 (新 v1.5)
   drawMountains();
@@ -719,8 +777,23 @@ function draw(){
   // P217: 节气粒子层——花瓣/雨丝/落叶/雪花 (v1.7)
   drawSeasonFx();
 
+  // P228: 落地荡漾 & 云中鹤飞掠
+  drawRipples();
+  drawCrane();
+
   // P225: 磁铁拉伸线 — 消磁
   magLines.forEach(m=>{ctx.save();ctx.globalAlpha=Math.max(.15,m.life/8);ctx.strokeStyle='rgba(170,220,100,'+(m.life/8)+')';ctx.lineWidth=1.5+1.5*(m.life/8);ctx.beginPath();ctx.moveTo(m.x1,m.y1);ctx.lineTo(m.x2,m.y2);ctx.stroke();ctx.restore();});
+
+  // P228: 爆气/15连击金币雨
+  if(coinRain){
+    for(let i=coinRain.length-1;i>=0;i--){
+      const c=coinRain[i];c.vy+=.012;c.y+=c.vy;c.life--;if(c.life<=0)coinRain.splice(i,1);
+      ctx.save();ctx.globalAlpha=c.life/180;
+      ctx.fillStyle=c.col;ctx.beginPath();ctx.arc(c.x,c.y,3+c.i*.08,0,6.28);ctx.fill();
+      ctx.fillStyle='rgba(50,45,40,.35)';ctx.beginPath();ctx.arc(c.x-1,c.y+2,1.5,0,6.28);ctx.fill();
+      ctx.restore();
+    }
+  }
 
   // 粒子
   particles.forEach(q=>{ctx.globalAlpha=Math.min(1,q.life/22);ctx.fillStyle=q.col;if(q.txt){ctx.font='bold 16px KaiTi';ctx.textAlign='center';ctx.fillText(q.txt,q.x,q.y);}else{ctx.beginPath();ctx.arc(q.x,q.y,q.r||3,0,6.2832);ctx.fill();}});

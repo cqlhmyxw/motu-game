@@ -36,16 +36,28 @@ canvas{display:block;box-shadow:0 0 40px rgba(0,0,0,.7)}
 #flash.on{opacity:1}
 .new-best{color:#e8c040 !important;animation:glow .8s infinite alternate}
 @keyframes glow{from{text-shadow:0 0 8px rgba(232,192,64,.4)}to{text-shadow:0 0 20px rgba(232,192,64,.9)}}
+/* P222: 图鉴 */
+#guideBtn{position:absolute;top:10px;right:12px;z-index:6;width:36px;height:36px;border-radius:50%;background:rgba(20,14,8,.6);border:1px solid rgba(200,168,112,.4);color:#c8a870;font:17px 'KaiTi',serif;cursor:pointer;line-height:34px;text-align:center;padding:0;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+#guideBtn.on{display:block}
+.guide-list{max-height:52vh;overflow-y:auto;padding:0 18px;display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px}
+.gi{display:flex;align-items:center;gap:12px;background:rgba(245,240,232,.05);border:1px solid rgba(200,168,112,.15);border-radius:6px;padding:8px 12px}
+.gi div{display:flex;flex-direction:column;gap:2px;text-align:left}
+.gi b{font-size:15px;letter-spacing:2px}
+.gi span{font-size:11px;color:#8b7355;letter-spacing:1px;line-height:1.5}
+.gic{background:rgba(10,14,10,.5);border-radius:50%;flex:0 0 34px}
+#guideClose{margin-top:16px}
 </style>
 </head>
 <body>
 <div id="wrap">
+<!-- P222: 道具图鉴入口 -->
+<button id="guideBtn" title="道具图鉴">图</button>
   <canvas id="c" width="420" height="680"></canvas>
   <div id="flash"></div>
   <div id="hud" style="display:none">
     <div class="l" id="scoreTxt">0</div>
     <div class="r">
-      <span id="skillLbl">技</span><span id="seasonLbl" style="font-size:12px;color:#d4c5a0">春</span>
+      <span id="skillLbl">技</span><span id="seasonLbl" style="font-size:12px;color:#d4c5a0">春</span><span id="hudShield" style="font-size:13px;color:#e8c040;min-width:18px;text-align:right"></span>
       <div style="width:70px;height:5px;background:rgba(0,0,0,.4);border-radius:3px;margin-top:2px;overflow:hidden;border:1px solid rgba(200,168,112,.3)">
         <div id="skillBar" style="width:0%;height:100%;background:linear-gradient(90deg,#c8a870,#e8c040);border-radius:2px;transition:width .2s"></div>
       </div>
@@ -65,6 +77,20 @@ canvas{display:block;box-shadow:0 0 40px rgba(0,0,0,.7)}
     <div class="st" id="overStats"></div>
     <button class="btn" id="retryBtn">再 闯</button>
   </div>
+  <!-- P222: 道具图鉴 — 首次玩家必看 -->
+  <div class="layer" id="guideScreen" style="display:none;background:rgba(8,6,4,.96);pointer-events:auto;z-index:9">
+    <h2 style="color:#c8a870;letter-spacing:8px;font-size:26px;margin:0 0 12px">道 具 图 鉴</h2>
+    <div class="guide-list">
+      <div class="gi"><canvas class="gic" data-k="coin" width="34" height="34"></canvas><div><b style="color:#e8c040">铜钱</b><span>加分 · 连拾加成</span></div></div>
+      <div class="gi"><canvas class="gic" data-k="pearl" width="34" height="34"></canvas><div><b style="color:#8b9dc0">墨珠</b><span>+5分 · 连击+3 · 技能+8</span></div></div>
+      <div class="gi"><canvas class="gic" data-k="shield" width="34" height="34"></canvas><div><b style="color:#c8705a">符纸</b><span>护身1层(最多叠3) · 撞竹挡1伤</span></div></div>
+      <div class="gi"><canvas class="gic" data-k="radish" width="34" height="34"></canvas><div><b style="color:#e8553a">萝卜</b><span>冲刺加速1.5秒</span></div></div>
+      <div class="gi"><canvas class="gic" data-k="herb" width="34" height="34"></canvas><div><b style="color:#5ab86a">灵草</b><span>技能+20 · 附1层符 · 短暂无敌</span></div></div>
+      <div class="gi"><canvas class="gic" data-k="burst" width="34" height="34"></canvas><div><b style="color:#ff6b4a">爆气</b><span>技槽满后点击屏幕 · 无敌加速</span></div></div>
+    </div>
+    <div style="font-size:11px;color:#6a5a3a;letter-spacing:2px;margin:10px 0">节气四变 · 十五连击墨韵爆发 · 廿五分道童祝福</div>
+    <button class="btn" id="guideClose">知 道 了</button>
+  </div>
 </div>
 <script>
 (() => {
@@ -74,6 +100,7 @@ const W=420,H=680;
 const $=id=>document.getElementById(id);
 const scoreTxt=$('scoreTxt'),bestTxt=$('bestTxt'),comboEl=$('combo'),hud=$('hud');
 const flashEl=$('flash'),skillBar=$('skillBar'),skillLbl=$('skillLbl');
+const hudShield=$('hudShield');
 const startScreen=$('startScreen'),overScreen=$('overScreen');
 
 const SAVE_KEY='motu_v1';
@@ -98,8 +125,8 @@ const sfx={
 
 // ============ 状态 ============
 let st='menu';
-let rabbit={x:90,y:H*0.42,v:0,rot:0,shield:false};
-let bamboo=[],pickups=[],particles=[],clouds=[],stars=[],fireflies=[],lanterns=[],seasonParts=[],trail=[];
+let rabbit={x:90,y:H*0.42,v:0,rot:0,shield:0};
+let bamboo=[],pickups=[],particles=[],clouds=[],stars=[],fireflies=[],lanterns=[],seasonParts=[],trail=[],shockwaves=[];
 let score=0,lastSpawn=0,shake=0,dayPhase=0,invincible=0,frame=0;
 let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0;
 let gameSpeed=1,speedBurst=0;
@@ -116,7 +143,7 @@ const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
 
 function reset(){
-  rabbit={x:90,y:H*0.42,v:0,rot:0,shield:false};
+  rabbit={x:90,y:H*0.42,v:0,rot:0,shield:0};
   bamboo=[];pickups=[];particles=[];clouds=[];
   stars=[];fireflies=[];lanterns=[];
   for(let i=0;i<4;i++) clouds.push({x:Math.random()*W,y:40+Math.random()*160,s:.15+Math.random()*.2,w:60+Math.random()*80});
@@ -124,7 +151,7 @@ function reset(){
   for(let i=0;i<8;i++) fireflies.push({x:Math.random()*W,y:60+Math.random()*260,ph:Math.random()*6.28,s:0.3+Math.random()*0.8,r:1.5+Math.random()*2});
   score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;
   season=0;seasonParts=[];blessTimer=0;trail=[];
-  scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';
+  scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';hudShield.textContent='';
   skillBar.style.background='linear-gradient(90deg,#c8a870,#e8c040)';
 }
 function diff(){
@@ -139,17 +166,17 @@ function diff(){
   else if(se.name==='冬'){spd*=0.92;if(Math.random()<0.04)spd*=1.3;} // 偶尔暴风雪加速
   return {speed:spd,gap:Math.max(130,190-d*1.6),interval:Math.max(110,150-d*1.1)};
 }
-function hasShield(){return rabbit&&rabbit.shield}
+function hasShield(){return rabbit&&rabbit.shield>0}
 
 function takeHit(){
   if(burstTimer>0||invincible>0)return true;
   if(hasShield()){
-    rabbit.shield=false;
+    rabbit.shield--;               // P221: 叠层护盾逐层消耗
     invincible=120;              // P216: 护盾触发给 2 秒无敌，足够穿过整根竹子
     rabbit.v=-6.2;               // P216: 反弹跳起，脱离碰撞区
     sfx.pearl();vib(20);
     puff(rabbit.x,rabbit.y,'#e8c040',14);
-    showCombo('符纸挡伤');
+    showCombo('符纸挡伤·剩'+(rabbit.shield>0?rabbit.shield:'0')+'层');
     return true;
   }
   return false;
@@ -241,9 +268,9 @@ function update(dt,now){
         if(comboN===15&&bamboo.length>0){let clearN=bamboo.length;bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',6));bamboo=[];score+=clearN*2;scoreTxt.textContent=score;showCombo('✦ 墨 韵 爆 发 ✦ 清'+clearN+'竹');sfx.burst();vib([60,40,100]);shake=14;}
       }
       else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');showCombo('墨珠 +5');addSkill(8);}
-      else if(p.kind==='shield'){rabbit.shield=true;sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身');addSkill(5);}
+      else if(p.kind==='shield'){rabbit.shield=Math.min(3,rabbit.shield+1);sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身·'+rabbit.shield+'层');addSkill(5);}
       else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=90;addSkill(5);}
-      else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=true;invincible=120;}
+      else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=Math.max(rabbit.shield,1);invincible=120;}
       pickups.splice(i,1);continue;
     }
     if(p.x<-20)pickups.splice(i,1);
@@ -251,6 +278,8 @@ function update(dt,now){
   if(comboTimer>0){comboTimer--;if(comboTimer===0)comboN=0;}
   if(invincible>0&&burstTimer<=0)invincible--;
   for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx;q.y+=q.vy;if(!q.txt)q.vy+=.12;q.life--;if(q.life<=0)particles.splice(i,1);}
+  // P222: 冲击波推进
+  for(let i=shockwaves.length-1;i>=0;i--){const w=shockwaves[i];w.r+=7;w.life-=.055;if(w.life<=0)shockwaves.splice(i,1);}
   for(let i=fireflies.length-1;i>=0;i--){const f=fireflies[i];f.x+=Math.sin(f.ph+now*.001)*.5;f.y+=Math.cos(f.ph*1.3+now*.0008)*.35;f.ph+=.02;if(f.x<-10)f.x=W+10;if(f.x>W+10)f.x=-10;if(f.y<50)f.y=H-50;if(f.y>H-50)f.y=50;}
   clouds.forEach(c=>{c.x-=c.s;if(c.x<-c.w)c.x=W+c.w;});
   for(let i=lanterns.length-1;i>=0;i--){const l=lanterns[i];l.x-=D.speed*.5;l.ph+=.03;if(l.x<-30)lanterns.splice(i,1);}
@@ -273,6 +302,10 @@ function activateBurst(){
   comboEl.classList.remove('skill-ready');
   sfx.skill();vib([50,30,80]);
   for(let i=0;i<25;i++){const a=Math.random()*6.2832,s=2+Math.random()*5;puff(rabbit.x,rabbit.y,'#ff9a3a',8);}
+  // P222: 爆气冲击波 + 白闪
+  shockwaves.push({x:rabbit.x,y:rabbit.y,r:RR,life:1,col:'#ff9a3a'});
+  shockwaves.push({x:rabbit.x,y:rabbit.y,r:4,life:1,col:'#ffd766'});
+  flashEl.classList.add('on');setTimeout(()=>flashEl.classList.remove('on'),90);
   showCombo('★ 爆 气 全 开 ★');
 }
 
@@ -327,6 +360,29 @@ function drawSeasonFx(){
 }
 
 // ============ 绘制 ============
+// P222: 全局氛围层 — 宣纸噪点纹理(预生成) + 暗角晕影 + 季节雾
+let paperTex=null;
+function makePaperTex(){
+  const c=document.createElement('canvas');c.width=c.height=128;
+  const x=c.getContext('2d'),id=x.createImageData(128,128);
+  for(let i=0;i<id.data.length;i+=4){const v=200+Math.random()*55;id.data[i]=id.data[i+1]=id.data[i+2]=v;id.data[i+3]=Math.random()*22;}
+  x.putImageData(id,0,0);return c;
+}
+function drawAmbience(){
+  if(!paperTex)paperTex=makePaperTex();
+  // 宣纸颗粒（极淡叠加，静止不闪烁更高级）
+  ctx.save();ctx.globalAlpha=.05;ctx.fillStyle=ctx.createPattern(paperTex,'repeat');ctx.fillRect(0,0,W,H);ctx.restore();
+  // 季节薄雾：画面下1/3一条流动的雾带
+  const se=SEASONS[season];
+  const fy=H*.66+Math.sin(performance.now()*.0004)*18;
+  const fg=ctx.createLinearGradient(0,fy-60,0,fy+90);
+  fg.addColorStop(0,'rgba(240,238,230,0)');fg.addColorStop(.5,season===3?'rgba(235,240,250,.14)':season===1?'rgba(200,220,235,.10)':'rgba(242,238,228,.09)');fg.addColorStop(1,'rgba(240,238,230,0)');
+  ctx.fillStyle=fg;ctx.fillRect(0,fy-60,W,150);
+  // 暗角晕影（四角压暗，聚焦中央）
+  const vg=ctx.createRadialGradient(W*.5,H*.45,H*.32,W*.5,H*.5,H*.78);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.75,'rgba(10,8,5,.16)');vg.addColorStop(1,'rgba(8,6,3,.42)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+}
 function draw(){
   ctx.save();
   if(shake>0)ctx.translate((Math.random()-.5)*shake*.8,(Math.random()-.5)*shake*.8);
@@ -466,7 +522,23 @@ function draw(){
     } else if(invincible>0&&(invincible%8<4)){
       ctx.globalAlpha=.35;
     }
-    if(rabbit.shield&&burstTimer<=0){ctx.strokeStyle='rgba(232,192,64,'+(.5+.3*Math.sin(performance.now()*.008))+')';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,RR+7,0,6.2832);ctx.stroke();}
+    if(rabbit.shield>0&&burstTimer<=0){
+      // P221: 叠层护盾可视化 — 层数越多环越多、越亮、符纸环绕
+      const t=performance.now()*.008;
+      const cols=['#e8c040','#e8a040','#d87a30'];
+      // 3层时金色光晕
+      if(rabbit.shield>=3){ctx.save();ctx.globalAlpha=.18+.08*Math.sin(t*2);ctx.fillStyle='#ffd766';ctx.beginPath();ctx.arc(0,0,RR+16,0,6.2832);ctx.fill();ctx.restore();}
+      // 主环（层数色）
+      ctx.strokeStyle='rgba(232,192,64,'+(.5+.3*Math.sin(t))+')';ctx.lineWidth=rabbit.shield>=2?4:3;ctx.beginPath();ctx.arc(0,0,RR+7,0,6.2832);ctx.stroke();
+      // 第二环（2层+，反向旋转虚线）
+      if(rabbit.shield>=2){ctx.save();ctx.rotate(-t*.5);ctx.strokeStyle='rgba(232,160,64,.6)';ctx.lineWidth=2;ctx.setLineDash([6,5]);ctx.beginPath();ctx.arc(0,0,RR+11,0,6.2832);ctx.stroke();ctx.setLineDash([]);ctx.restore();}
+      // 第三环（3层，外圈旋转亮点）
+      if(rabbit.shield>=3){ctx.save();ctx.rotate(t*.7);ctx.strokeStyle='rgba(216,122,48,.75)';ctx.lineWidth=1.5;ctx.setLineDash([3,9]);ctx.beginPath();ctx.arc(0,0,RR+15,0,6.2832);ctx.stroke();ctx.setLineDash([]);for(let i=0;i<3;i++){ctx.save();ctx.rotate(i*2.094);ctx.fillStyle='#ffd766';ctx.beginPath();ctx.arc(RR+15,0,2.2,0,6.2832);ctx.fill();ctx.restore();}ctx.restore();}
+      // 环绕符纸（数量=层数）
+      for(let i=0;i<rabbit.shield;i++){const a=t*.9+i*6.2832/rabbit.shield;ctx.save();ctx.translate(Math.cos(a)*(RR+13),Math.sin(a)*(RR+13));ctx.rotate(a);ctx.fillStyle='rgba(242,230,200,.9)';ctx.strokeStyle='#9a3a2a';ctx.lineWidth=.8;ctx.fillRect(-3,-4.5,6,9);ctx.strokeRect(-3,-4.5,6,9);ctx.fillStyle='#9a3a2a';ctx.font='bold 6px KaiTi';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('符',0,.5);ctx.restore();}
+      // HUD层数角标
+      hudShield.textContent=rabbit.shield>1?'×'+rabbit.shield:'';
+    } else if(rabbit.shield<=0){hudShield.textContent='';}
     const lean=Math.max(-.5,Math.min(.5,-rabbit.v*.05));
     ctx.fillStyle='#d8cfc0';ctx.strokeStyle='#3a3228';ctx.lineWidth=1.5;
     for(const s of[-1,1]){
@@ -511,7 +583,13 @@ function draw(){
 
   // 粒子
   particles.forEach(q=>{ctx.globalAlpha=Math.min(1,q.life/22);ctx.fillStyle=q.col;if(q.txt){ctx.font='bold 16px KaiTi';ctx.textAlign='center';ctx.fillText(q.txt,q.x,q.y);}else{ctx.beginPath();ctx.arc(q.x,q.y,q.r||3,0,6.2832);ctx.fill();}});
-  ctx.globalAlpha=1;ctx.restore();
+  ctx.globalAlpha=1;
+  // P222: 冲击波环（爆气/祝福爆发视觉）
+  shockwaves.forEach(w=>{ctx.save();ctx.globalAlpha=Math.max(0,w.life)*.7;ctx.strokeStyle=w.col;ctx.lineWidth=3+4*w.life;ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,6.2832);ctx.stroke();ctx.restore();});
+
+  // P222: 全屏氛围层（雾+暗角+纸纹）放在最上层
+  drawAmbience();
+  ctx.restore();
 }
 
 // 远景山峦 (新 v1.5)
@@ -648,6 +726,29 @@ function pauseGame(){if(st!=='play')return;st='pause';comboEl.textContent='暂 �
 function resume(){if(st!=='pause')return;st='play';comboEl.classList.remove('show');}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseGame();});
 
+// ============ P222: 道具图鉴 ============
+const guideScreen=$('guideScreen'),guideBtn=$('guideBtn');
+function drawGuideIcons(){
+  document.querySelectorAll('.gic').forEach(cv=>{
+    const g=cv.getContext('2d'),k=cv.dataset.k;g.clearRect(0,0,34,34);g.save();g.translate(17,17);
+    if(k==='coin'){const cg=g.createRadialGradient(-3,-3,1,0,0,10);cg.addColorStop(0,'#ffe89a');cg.addColorStop(.6,'#e8c040');cg.addColorStop(1,'#9a7a1a');g.fillStyle=cg;g.beginPath();g.arc(0,0,9,0,6.28);g.fill();g.strokeStyle='#7a5a10';g.lineWidth=1.5;g.stroke();g.fillStyle='rgba(60,40,5,.85)';g.fillRect(-2.5,-2.5,5,5);}
+    else if(k==='pearl'){const pg=g.createRadialGradient(-4,-4,1,0,0,11);pg.addColorStop(0,'#6b7488');pg.addColorStop(.5,'#2a2f3a');pg.addColorStop(1,'#12151c');g.fillStyle=pg;g.beginPath();g.arc(0,0,10,0,6.28);g.fill();g.fillStyle='rgba(255,255,255,.75)';g.beginPath();g.arc(-3.5,-3.5,2.6,0,6.28);g.fill();}
+    else if(k==='shield'){const sg=g.createLinearGradient(-8,-14,8,14);sg.addColorStop(0,'#faf5e6');sg.addColorStop(.5,'#f2e6c8');sg.addColorStop(1,'#ddceaa');g.fillStyle=sg;g.fillRect(-8,-14,16,28);g.strokeStyle='#9a3a2a';g.lineWidth=1.8;g.strokeRect(-8,-14,16,28);g.fillStyle='#9a3a2a';g.font='bold 13px KaiTi';g.textAlign='center';g.textBaseline='middle';g.fillText('符',0,0);}
+    else if(k==='radish'){g.fillStyle='#d94a3a';g.beginPath();g.ellipse(0,2,7,11,0,0,6.28);g.fill();g.fillStyle='#2d7a3a';g.beginPath();g.moveTo(0,-9);g.lineTo(2,-17);g.lineTo(-1,-9);g.fill();g.fillStyle='#f5f0e8';g.fillRect(-3,9,6,4);}
+    else if(k==='herb'){g.fillStyle='#e8c040';g.strokeStyle='#8b6a1a';g.lineWidth=1.5;g.beginPath();g.arc(0,0,8,0,6.28);g.fill();g.stroke();g.fillStyle='#5ab86a';g.font='bold 9px KaiTi';g.textAlign='center';g.textBaseline='middle';g.fillText('草',0,1);}
+    else if(k==='burst'){const bg=g.createRadialGradient(0,0,2,0,0,12);bg.addColorStop(0,'#ffd766');bg.addColorStop(.5,'#ff9a3a');bg.addColorStop(1,'rgba(255,80,20,0)');g.fillStyle=bg;g.beginPath();g.arc(0,0,12,0,6.28);g.fill();g.fillStyle='#fff2cc';g.font='bold 11px KaiTi';g.textAlign='center';g.textBaseline='middle';g.fillText('爆',0,1);}
+    g.restore();
+  });
+}
+function openGuide(){guideScreen.style.display='flex';drawGuideIcons();}
+function closeGuide(){guideScreen.style.display='none';}
+guideBtn.addEventListener('click',e=>{e.stopPropagation();openGuide();});
+guideBtn.addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();openGuide();},{passive:false});
+$('guideClose').addEventListener('click',e=>{e.stopPropagation();closeGuide();});
+$('guideClose').addEventListener('touchstart',e=>{e.stopPropagation();e.preventDefault();closeGuide();},{passive:false});
+// 首次进入自动弹图鉴
+if(!localStorage.getItem(SAVE_KEY+'_g')){setTimeout(()=>{guideScreen.style.display='flex';drawGuideIcons();try{localStorage.setItem(SAVE_KEY+'_g','1')}catch(_){}},600);}
+
 function showOver(){
   hud.style.display='none';
   const isBest=score>best&&score>0;
@@ -664,7 +765,7 @@ $('retryBtn').addEventListener('click',retry);
 function fit(){const s=Math.min(innerWidth/W,innerHeight/H);cvs.style.width=(W*s)+'px';cvs.style.height=(H*s)+'px';}
 addEventListener('resize',fit);fit();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
+window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},get shield(){return rabbit.shield},addShield(){rabbit.shield=Math.min(3,rabbit.shield+1)},hitOnce(){const s=rabbit.shield;invincible=0;burstTimer=0;const ok=takeHit();return {before:s,after:rabbit.shield,blocked:ok}},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
 })();
 </script>
 </body>

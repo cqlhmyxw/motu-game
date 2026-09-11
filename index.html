@@ -116,7 +116,8 @@ function update(dt,now){
     if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=(score%40)/40;}
     if(rabbit.x+RR>b.x&&rabbit.x-RR<b.x+b.w){
       if(rabbit.y-RR<b.gapY-b.gap/2||rabbit.y+RR>b.gapY+b.gap/2){
-        if(hasShield()&&invincible<=0){rabbit.shield=false;invincible=24;sfx.pearl();puff(rabbit.x,rabbit.y,'#e8c040',14);}
+        if(invincible>0){}                                  // P215: 无敌帧时忽略所有撞击
+        else if(hasShield()){rabbit.shield=false;invincible=24;sfx.pearl();puff(rabbit.x,rabbit.y,'#e8c040',14);}  // 符纸抵消一次伤害
         else{hit();return;}
       }
     }

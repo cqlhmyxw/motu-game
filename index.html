@@ -331,7 +331,41 @@ function activateBurst(){
   showCombo('★ 爆 气 全 开 ★');
 }
 
-function hit(){sfx.die();vib([40,30,90]);shake=18;puff(rabbit.x,rabbit.y,'#2a2a2a',28);st='dead';setTimeout(showOver,700);}
+// P227: 死亡墨花 —— 失败也有一朵完整的墨花绽放（比黑爆有仪式感）
+// 若玩家连击≥15，死亡时绽放火焰尾羽（墨韵爆发余晖）
+let doomBloom=null;
+function spawnDoomBloom(x,y){
+  const isBurst=comboN>=15;
+  doomBloom={x,y,life:0,max:120,petals:[],burst:isBurst};
+  for(let i=0;i<(isBurst?18:14);i++){
+    const a=i/(isBurst?18:14)*Math.PI*2+Math.random()*.3,pr=8+Math.random()*14;
+    doomBloom.petals.push({a,pr});
+  }
+}
+function drawDoomBloom(){
+  if(!doomBloom)return;
+  doomBloom.life+=1.5;
+  const k=Math.min(1,doomBloom.life/doomBloom.max);
+  ctx.save();ctx.globalAlpha=Math.max(0,1-k*.7);
+  ctx.translate(doomBloom.x,doomBloom.y);
+  const colors=doomBloom.burst?['#ff6b4a','#ff9a3a','#ffd76a']:'#2a2a2a';
+  for(const pt of doomBloom.petals){
+    const r=k*pt.pr,rot=pt.a+Math.sin(doomBloom.life*.04+pt.a)*.3;
+    ctx.save();ctx.rotate(rot);
+    if(doomBloom.burst){
+      const grad=ctx.createRadialGradient(0,0,1,0,0,r*.4);
+      grad.addColorStop(0,'#ff3838');grad.addColorStop(.5,'#ff6b4a');grad.addColorStop(1,'rgba(255,110,60,0)');
+      ctx.fillStyle=grad;
+    }else ctx.fillStyle='rgba(45,45,48,'+(1-k*.6)+')';
+    ctx.beginPath();ctx.ellipse(r*.4,0,r*.8,r*.42,0,0,6.2832);ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle=doomBloom.burst?'rgba(255,100,50,'+(1-k)+')':'rgba(30,30,35,'+(1-k)+')';
+  ctx.beginPath();ctx.arc(0,0,4+2*k,0,6.2832);ctx.fill();
+  ctx.restore();
+  if(doomBloom.life>=doomBloom.max)doomBloom=null;
+}
+function hit(){sfx.die();vib([40,30,90]);shake=18;puff(rabbit.x,rabbit.y,'#2a2a2a',28);spawnDoomBloom(rabbit.x,rabbit.y);st='dead';setTimeout(showOver,700);}
 
 function puff(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*6.2832,s=1+Math.random()*3.4;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.2,life:18+Math.random()*22,r:2+Math.random()*4,col});}}
 function floatText(x,y,txt){particles.push({x,y,vx:0,vy:-1.1,life:34,txt,col:'#8b6a1a'});}
@@ -696,6 +730,8 @@ function draw(){
 
   // P222: 全屏氛围层（雾+暗角+纸纹）放在最上层
   drawAmbience();
+  // P227: 死亡墨花（失败后绽放，仪式感）
+  drawDoomBloom();
   ctx.restore();
 }
 
@@ -944,7 +980,7 @@ function fit(){
 }
 addEventListener('resize',fit);fit();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},get shield(){return rabbit.shield},get menu(){return{frame:Math.round(frame),bamboo:menuBamboo.length,spark:menuSparkles.length,tier:__tier,dpr:DPR}},addShield(){rabbit.shield=Math.min(3,rabbit.shield+1)},hitOnce(){const s=rabbit.shield;invincible=0;burstTimer=0;const ok=takeHit();return {before:s,after:rabbit.shield,blocked:ok}},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
+window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},get shield(){return rabbit.shield},get menu(){return{frame:Math.round(frame),bamboo:menuBamboo.length,spark:menuSparkles.length,tier:__tier,dpr:DPR}},get combo(){return comboN},get doom(){return doomBloom?{burst:doomBloom.burst,life:Math.round(doomBloom.life),petals:doomBloom.petals.length}:null},setCombo(n){comboN=n;comboTimer=90;},killSelf(){invincible=0;burstTimer=0;rabbit.shield=0;hit();},addShield(){rabbit.shield=Math.min(3,rabbit.shield+1)},hitOnce(){const s=rabbit.shield;invincible=0;burstTimer=0;const ok=takeHit();return {before:s,after:rabbit.shield,blocked:ok}},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
 })();
 </script>
 </body>

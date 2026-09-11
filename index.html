@@ -97,6 +97,11 @@ canvas{display:block;box-shadow:0 0 40px rgba(0,0,0,.7)}
 'use strict';
 const cvs=document.getElementById('c'),ctx=cvs.getContext('2d');
 const W=420,H=680;
+// P223: 高清渲染 — backing store 按 devicePixelRatio 放大，CSS 尺寸不变，画面不再糊
+let DPR=Math.min(window.devicePixelRatio||1,2.5);
+cvs.width=W*DPR;cvs.height=H*DPR;
+ctx.setTransform(DPR,0,0,DPR,0,0);
+ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
 const $=id=>document.getElementById(id);
 const scoreTxt=$('scoreTxt'),bestTxt=$('bestTxt'),comboEl=$('combo'),hud=$('hud');
 const flashEl=$('flash'),skillBar=$('skillBar'),skillLbl=$('skillLbl');
@@ -138,7 +143,7 @@ const SEASONS=[
   {name:'冬',part:'snow', pc:'#f0f0f8',sky:['#b8c0cc','#dce0e8']}
 ];
 let season=0,blessTimer=0;
-const G=0.42,JUMP=-7.6,RR=13;
+const G=0.47,JUMP=-8.4,RR=13; // P223: 提速同步上调重力/跳力，保持跳跃手感一致
 const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
 
@@ -156,15 +161,14 @@ function reset(){
 }
 function diff(){
   const d=Math.min(score,80);
-  let spd=2.1+d*.048;
+  let spd=3.4+d*.085;   // P223: 提回流畅速度（旧2.1+0.048太肉）
   if(speedBurst>0) spd*=1.35;
   spd*=gameSpeed;
-  // P217: 春加速/夏减速/秋不变/冬减速+危险
+  // P223: 季节系数不再拖速度——春加速、其余中性、冬微快(结冰打滑感)
   const se=SEASONS[season];
-  if(se.name==='春')spd*=1.1;
-  else if(se.name==='夏')spd*=0.95;
-  else if(se.name==='冬'){spd*=0.92;if(Math.random()<0.04)spd*=1.3;} // 偶尔暴风雪加速
-  return {speed:spd,gap:Math.max(130,190-d*1.6),interval:Math.max(110,150-d*1.1)};
+  if(se.name==='春')spd*=1.08;
+  else if(se.name==='冬')spd*=1.05;
+  return {speed:spd,gap:Math.max(145,195-d*1.15),interval:Math.max(120,158-d*.9)};
 }
 function hasShield(){return rabbit&&rabbit.shield>0}
 
@@ -217,17 +221,18 @@ function spawnBamboo(){
 }
 
 // ============ 更新 ============
+// P223: 物理改为 dt 驱动（dt=本帧耗时/16.67ms，钳制2.5防跳帧）——帧率波动不再影响速度
 function update(dt,now){
   const D=diff();
-  frame++;
+  frame+=dt;
   if(burstTimer>0){
-    burstTimer--;
-    if(burstTimer===0){invincible=0;skillLbl.style.color='#c8a870';skillLbl.textContent='技';}
+    burstTimer-=dt;
+    if(burstTimer<=0){burstTimer=0;invincible=0;skillLbl.style.color='#c8a870';skillLbl.textContent='技';}
   }
-  if(speedBurst>0){speedBurst--;}
-  if(doubleCoinTimer>0)doubleCoinTimer--;
-  if(lowGravTimer>0)lowGravTimer--;
-  rabbit.v+=(lowGravTimer>0?G*0.5:G);rabbit.y+=rabbit.v;
+  if(speedBurst>0){speedBurst-=dt;if(speedBurst<0)speedBurst=0;}
+  if(doubleCoinTimer>0)doubleCoinTimer-=dt;
+  if(lowGravTimer>0)lowGravTimer-=dt;
+  rabbit.v+=(lowGravTimer>0?G*0.5:G)*dt;rabbit.y+=rabbit.v*dt;
   rabbit.rot=Math.max(-.5,Math.min(1.1,rabbit.v*.06));
   if(rabbit.y<RR){rabbit.y=RR;rabbit.v=0;}
   if(rabbit.y>H-RR){
@@ -235,11 +240,11 @@ function update(dt,now){
     if(!takeHit()){hit();return;}
     rabbit.v=-3.2; // P215: 护盾/无敌触发后弹离底部，避免下一帧重复撞击
   }
-  lastSpawn+=D.speed;
+  lastSpawn+=D.speed*dt;
   if(lastSpawn>D.interval+60){lastSpawn=0;spawnBamboo();}
   for(let i=bamboo.length-1;i>=0;i--){
-    const b=bamboo[i];b.x-=D.speed;
-    if(b.move){const minY=70+b.gap/2,maxY=H-70-b.gap/2;b.gapY+=Math.sin((now||performance.now())*.002+b.ph)*.7;if(b.gapY<minY)b.gapY=minY;if(b.gapY>maxY)b.gapY=maxY;}
+    const b=bamboo[i];b.x-=D.speed*dt;
+    if(b.move){const minY=70+b.gap/2,maxY=H-70-b.gap/2;b.gapY+=Math.sin((now||performance.now())*.002+b.ph)*.7*dt;if(b.gapY<minY)b.gapY=minY;if(b.gapY>maxY)b.gapY=maxY;}
     if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=Math.min(1,(score%50)/40);if(score%25===0&&blessTimer<=0)applyBlessing();}
     if(rabbit.x+RR>b.x&&rabbit.x-RR<b.x+b.w){
       if(rabbit.y-RR<b.gapY-b.gap/2||rabbit.y+RR>b.gapY+b.gap/2){
@@ -250,16 +255,14 @@ function update(dt,now){
   }
   for(let i=pickups.length-1;i>=0;i--){
     const p=pickups[i];
-    p.ph+=.1;
-    // P220: 道具坐标完全绑定竹竿 — 跟随其间隙中心，绝不会再嵌进墙里
+    p.ph+=.1*dt;
     if(p.ref){
-      if(bamboo.indexOf(p.ref)<0){pickups.splice(i,1);continue;} // 竹竿被清屏/移出 → 道具同灭
-      // 道具贴靠竹竿内壁（x 放竿左缘+小偏移），y 跟随间隙轨道，避免挡穿越口
+      if(bamboo.indexOf(p.ref)<0){pickups.splice(i,1);continue;}
       p.x=p.ref.x+p.ref.w*0.2;
       p.y=p.ref.gapY+p.off;
       if(p.ref.x+p.ref.w<-20)pickups.splice(i,1);
     } else {
-      p.x-=D.speed;
+      p.x-=D.speed*dt;
     }
     const dx=p.x-rabbit.x,dy=p.y-rabbit.y;
     if(dx*dx+dy*dy<(RR+11)*(RR+11)){
@@ -275,16 +278,16 @@ function update(dt,now){
     }
     if(p.x<-20)pickups.splice(i,1);
   }
-  if(comboTimer>0){comboTimer--;if(comboTimer===0)comboN=0;}
-  if(invincible>0&&burstTimer<=0)invincible--;
-  for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx;q.y+=q.vy;if(!q.txt)q.vy+=.12;q.life--;if(q.life<=0)particles.splice(i,1);}
+  if(comboTimer>0){comboTimer-=dt;if(comboTimer<=0)comboN=0;}
+  if(invincible>0&&burstTimer<=0){invincible-=dt;if(invincible<0)invincible=0;}
+  for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx*dt;q.y+=q.vy*dt;if(!q.txt)q.vy+=.12*dt;q.life-=dt;if(q.life<=0)particles.splice(i,1);}
   // P222: 冲击波推进
-  for(let i=shockwaves.length-1;i>=0;i--){const w=shockwaves[i];w.r+=7;w.life-=.055;if(w.life<=0)shockwaves.splice(i,1);}
-  for(let i=fireflies.length-1;i>=0;i--){const f=fireflies[i];f.x+=Math.sin(f.ph+now*.001)*.5;f.y+=Math.cos(f.ph*1.3+now*.0008)*.35;f.ph+=.02;if(f.x<-10)f.x=W+10;if(f.x>W+10)f.x=-10;if(f.y<50)f.y=H-50;if(f.y>H-50)f.y=50;}
-  clouds.forEach(c=>{c.x-=c.s;if(c.x<-c.w)c.x=W+c.w;});
-  for(let i=lanterns.length-1;i>=0;i--){const l=lanterns[i];l.x-=D.speed*.5;l.ph+=.03;if(l.x<-30)lanterns.splice(i,1);}
-  updateSeasonFx(now);
-  if(shake>0)shake--;
+  for(let i=shockwaves.length-1;i>=0;i--){const w=shockwaves[i];w.r+=7*dt;w.life-=.055*dt;if(w.life<=0)shockwaves.splice(i,1);}
+  for(let i=fireflies.length-1;i>=0;i--){const f=fireflies[i];f.x+=Math.sin(f.ph+now*.001)*.5*dt;f.y+=Math.cos(f.ph*1.3+now*.0008)*.35*dt;f.ph+=.02*dt;if(f.x<-10)f.x=W+10;if(f.x>W+10)f.x=-10;if(f.y<50)f.y=H-50;if(f.y>H-50)f.y=50;}
+  clouds.forEach(c=>{c.x-=c.s*dt;if(c.x<-c.w)c.x=W+c.w;});
+  for(let i=lanterns.length-1;i>=0;i--){const l=lanterns[i];l.x-=D.speed*.5*dt;l.ph+=.03*dt;if(l.x<-30)lanterns.splice(i,1);}
+  updateSeasonFx(now,dt);
+  if(shake>0)shake=Math.max(0,shake-dt);
 }
 
 function addSkill(pts){
@@ -342,46 +345,50 @@ function advanceSeason(){
   const next=Math.min(3,Math.floor(score/12));
   if(next!==season){season=next;seasonParts=[];blessTimer=100;showCombo('节气·'+SEASONS[season].name+'临');sfx.skill();puff(rabbit.x,rabbit.y,SEASONS[season].pc,18);const sl=$('seasonLbl');if(sl){sl.textContent=SEASONS[season].name;sl.style.color=SEASONS[season].pc;}}
 }
-function updateSeasonFx(now){
+function updateSeasonFx(now,dt){
+  dt=dt||1;
   advanceSeason();
-  if(blessTimer>0)blessTimer--;
+  if(blessTimer>0){blessTimer-=dt;if(blessTimer<0)blessTimer=0;}
   trail.push({x:rabbit.x-8,y:rabbit.y+10,life:18,col:SEASONS[season].pc});
   if(trail.length>18)trail.shift();
   const count=season===3?2:1;
-  if(frame%6===0)for(let i=0;i<count;i++)seasonParts.push({x:Math.random()*W,y:-8,vy:1.2+Math.random()*1.8,vx:(Math.random()-.5)*.5,life:100,rot:Math.random()*6.28});
-  for(let i=seasonParts.length-1;i>=0;i--){const p=seasonParts[i];p.x+=p.vx;p.y+=p.vy;p.rot+=.03;p.life--;if(p.y>H+12||p.life<=0)seasonParts.splice(i,1);}
+  if((frame|0)%6===0)for(let i=0;i<count;i++)seasonParts.push({x:Math.random()*W,y:-8,vy:1.2+Math.random()*1.8,vx:(Math.random()-.5)*.5,life:100,rot:Math.random()*6.28});
+  for(let i=seasonParts.length-1;i>=0;i--){const p=seasonParts[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.rot+=.03*dt;p.life-=dt;if(p.y>H+12||p.life<=0)seasonParts.splice(i,1);}
 }
 function drawSeasonFx(){
   const se=SEASONS[season];
-  trail.forEach(t=>{ctx.globalAlpha=t.life/70;ctx.fillStyle=t.col;ctx.beginPath();ctx.arc(t.x,t.y,2.5,0,6.28);ctx.fill();t.life--;});
+  trail.forEach(t=>{ctx.globalAlpha=t.life/70;ctx.fillStyle=t.col;ctx.beginPath();ctx.arc(t.x,t.y,2.5,0,6.28);ctx.fill();t.life-=1.2;});
   ctx.save();ctx.globalAlpha=.72;ctx.fillStyle=se.pc;
   seasonParts.forEach(p=>{ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);if(se.part==='rain'){ctx.fillRect(0,0,1,9);}else if(se.part==='snow'){ctx.beginPath();ctx.arc(0,0,2.5,0,6.28);ctx.fill();}else{ctx.beginPath();ctx.ellipse(0,0,4,2,0,0,6.28);ctx.fill();}ctx.restore();});
   ctx.restore();ctx.globalAlpha=1;
 }
 
 // ============ 绘制 ============
-// P222: 全局氛围层 — 宣纸噪点纹理(预生成) + 暗角晕影 + 季节雾
-let paperTex=null;
+// P223: 全局氛围层 v2 — 预烘焙纸纹pattern + 预建晕影渐变，每帧不再新建任何渐变
+let paperTex=null,paperPat=null,vig=null;
 function makePaperTex(){
   const c=document.createElement('canvas');c.width=c.height=128;
   const x=c.getContext('2d'),id=x.createImageData(128,128);
   for(let i=0;i<id.data.length;i+=4){const v=200+Math.random()*55;id.data[i]=id.data[i+1]=id.data[i+2]=v;id.data[i+3]=Math.random()*22;}
   x.putImageData(id,0,0);return c;
 }
+function ensureAtmos(){
+  if(!paperTex){paperTex=makePaperTex();paperPat=ctx.createPattern(paperTex,'repeat');}
+  if(!vig){vig=ctx.createRadialGradient(W*.5,H*.45,H*.32,W*.5,H*.5,H*.78);
+    vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(.75,'rgba(10,8,5,.14)');vig.addColorStop(1,'rgba(8,6,3,.4)');}
+}
 function drawAmbience(){
-  if(!paperTex)paperTex=makePaperTex();
-  // 宣纸颗粒（极淡叠加，静止不闪烁更高级）
-  ctx.save();ctx.globalAlpha=.05;ctx.fillStyle=ctx.createPattern(paperTex,'repeat');ctx.fillRect(0,0,W,H);ctx.restore();
-  // 季节薄雾：画面下1/3一条流动的雾带
-  const se=SEASONS[season];
+  ensureAtmos();
+  // 宣纸颗粒（pattern 缓存，一次 fill）
+  ctx.save();ctx.globalAlpha=.045;ctx.fillStyle=paperPat;ctx.fillRect(0,0,W,H);ctx.restore();
+  // 季节薄雾（唯一的每帧渐变，且复用对象）
   const fy=H*.66+Math.sin(performance.now()*.0004)*18;
+  const t=season===3?['rgba(235,240,250,.13)','rgba(235,240,250,0)']:season===1?['rgba(200,220,235,.10)','rgba(200,220,235,0)']:['rgba(242,238,228,.08)','rgba(242,238,228,0)'];
   const fg=ctx.createLinearGradient(0,fy-60,0,fy+90);
-  fg.addColorStop(0,'rgba(240,238,230,0)');fg.addColorStop(.5,season===3?'rgba(235,240,250,.14)':season===1?'rgba(200,220,235,.10)':'rgba(242,238,228,.09)');fg.addColorStop(1,'rgba(240,238,230,0)');
+  fg.addColorStop(0,t[1]);fg.addColorStop(.5,t[0]);fg.addColorStop(1,t[1]);
   ctx.fillStyle=fg;ctx.fillRect(0,fy-60,W,150);
-  // 暗角晕影（四角压暗，聚焦中央）
-  const vg=ctx.createRadialGradient(W*.5,H*.45,H*.32,W*.5,H*.5,H*.78);
-  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.75,'rgba(10,8,5,.16)');vg.addColorStop(1,'rgba(8,6,3,.42)');
-  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  // 暗角晕影（缓存的渐变）
+  ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
 }
 function draw(){
   ctx.save();
@@ -540,31 +547,60 @@ function draw(){
       hudShield.textContent=rabbit.shield>1?'×'+rabbit.shield:'';
     } else if(rabbit.shield<=0){hudShield.textContent='';}
     const lean=Math.max(-.5,Math.min(.5,-rabbit.v*.05));
-    ctx.fillStyle='#d8cfc0';ctx.strokeStyle='#3a3228';ctx.lineWidth=1.5;
+    const now=performance.now();
+    // P223: 兔子重绘 — 大头二头身、灵动大眼、会眨眼、耳朵摇摆、腮红、软投影，可爱+质感
+    // 落地软影
+    ctx.save();ctx.globalAlpha=.16;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,RR+6,RR*.95,3.5,0,0,6.2832);ctx.fill();ctx.restore();
+    // 耳朵：长而下垂感，随风/速度摇摆，内侧粉晕
     for(const s of[-1,1]){
-      ctx.save();ctx.translate(s*6,-RR+2);ctx.rotate(lean*s*.6+s*.25);
-      ctx.beginPath();ctx.ellipse(0,-13,5.5,14,0,0,6.2832);ctx.fill();ctx.stroke();
-      ctx.fillStyle='#b08878';ctx.beginPath();ctx.ellipse(0,-13,2.5,9,0,0,6.2832);ctx.fill();ctx.fillStyle='#d8cfc0';
+      ctx.save();ctx.translate(s*4.5,-RR+1);ctx.rotate(lean*s*.5+s*.22+Math.sin(now*.004+s)*.09);
+      const eg=ctx.createLinearGradient(-6,-26,6,4);eg.addColorStop(0,'#fdf8ef');eg.addColorStop(.55,'#e8ddca');eg.addColorStop(1,'#b8ac97');
+      ctx.fillStyle=eg;ctx.strokeStyle='#3a3228';ctx.lineWidth=1.4;
+      ctx.beginPath();ctx.ellipse(0,-13,5.2,14.5,0,0,6.2832);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#e3a99f';ctx.beginPath();ctx.ellipse(0,-13,2.3,8.5,0,0,6.2832);ctx.fill();
       ctx.restore();
     }
-    // 兔身：宣纸渐变 + 墨线轮廓 + 腹部阴影
-    const bg=ctx.createRadialGradient(-4,-5,2,1,2,RR+3);bg.addColorStop(0,'#fffaf0');bg.addColorStop(.62,'#e4d9c8');bg.addColorStop(1,'#a99d8d');
-    ctx.fillStyle=bg;ctx.beginPath();ctx.arc(0,0,RR+2,0,6.2832);ctx.fill();
-    ctx.strokeStyle='#30271f';ctx.lineWidth=1.6;ctx.stroke();
-    // 眼睛、眉线、鼻子和胡须，避免主角像一个白色圆点
-    ctx.fillStyle='#211a16';ctx.beginPath();ctx.arc(5,-4,2.2,0,6.2832);ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();ctx.arc(5.8,-4.8,.7,0,6.2832);ctx.fill();
-    ctx.strokeStyle='#514238';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(2,-8);ctx.quadraticCurveTo(5,-10,8,-8);ctx.stroke();
-    ctx.fillStyle='#a94f51';ctx.beginPath();ctx.arc(11,2,2,0,6.2832);ctx.fill();
-    ctx.strokeStyle='rgba(60,45,35,.65)';ctx.lineWidth=.7;
-    for(const yy of[-2,2,6]){ctx.beginPath();ctx.moveTo(11,yy);ctx.lineTo(19,yy-2);ctx.stroke();}
-    // 腹部墨影与短腿
-    ctx.fillStyle='rgba(105,90,75,.18)';ctx.beginPath();ctx.ellipse(-2,7,8,4,0,0,6.2832);ctx.fill();
-    ctx.fillStyle='#d0c4b3';ctx.strokeStyle='#40352c';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(-5,13,5,3,0,0,6.2832);ctx.fill();ctx.stroke();
-    // 围巾：爆气时变朱砂色
-    ctx.fillStyle=burstTimer>0?'#d85b45':'#6b3030';ctx.fillRect(-11,5,20,3);ctx.beginPath();ctx.moveTo(5,7);ctx.lineTo(11,18);ctx.lineTo(7,10);ctx.closePath();ctx.fill();
-    // 尾巴
-    ctx.fillStyle='#eee5d8';ctx.strokeStyle='#40352c';ctx.beginPath();ctx.arc(-13,-2,5,0,6.2832);ctx.fill();ctx.stroke();
+    // 身体（宣纸渐变+腹部阴影）
+    const bg=ctx.createRadialGradient(-4,-6,2,1,2,RR+3);bg.addColorStop(0,'#fffaf0');bg.addColorStop(.6,'#ece1d0');bg.addColorStop(1,'#a99d8d');
+    ctx.fillStyle=bg;ctx.strokeStyle='#30271f';ctx.lineWidth=1.6;
+    ctx.beginPath();ctx.ellipse(0,4,RR*.95,RR*.85,0,0,6.2832);ctx.fill();ctx.stroke();
+    // 大头（二头身，可爱）
+    const hg=ctx.createRadialGradient(-3,-4,2,0,0,RR+1);hg.addColorStop(0,'#fffaf0');hg.addColorStop(.7,'#efe6d8');hg.addColorStop(1,'#c0b5a2');
+    ctx.fillStyle=hg;ctx.beginPath();ctx.arc(2,-3,RR*.82,0,6.2832);ctx.fill();ctx.stroke();
+    // 眼：大而灵动 + 眨眼（每约3.4秒眨一次）+ 双高光
+    const blink=(now%3400)<130;
+    if(blink){
+      ctx.strokeStyle='#241d17';ctx.lineWidth=1.6;
+      ctx.beginPath();ctx.arc(6,-5,3.2,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
+      ctx.beginPath();ctx.arc(12.5,-4,2.6,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
+    } else {
+      ctx.fillStyle='#241d17';
+      ctx.beginPath();ctx.ellipse(6,-5,2.7,3.3,0,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.ellipse(12.5,-4,2.1,2.7,0,0,6.2832);ctx.fill();
+      ctx.fillStyle='#fff';
+      ctx.beginPath();ctx.arc(6.8,-6.2,1.05,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.arc(5.4,-4,0.55,0,6.2832);ctx.fill();
+      ctx.beginPath();ctx.arc(13.2,-5,0.8,0,6.2832);ctx.fill();
+    }
+    // 腮红 + 鼻子 + 嘴
+    ctx.fillStyle='rgba(240,150,150,.4)';ctx.beginPath();ctx.ellipse(4.5,1.5,2.6,1.6,0,0,6.2832);ctx.fill();ctx.beginPath();ctx.ellipse(14,2,2.1,1.4,0,0,6.2832);ctx.fill();
+    ctx.fillStyle='#e08a80';ctx.beginPath();ctx.moveTo(11.5,-.5);ctx.lineTo(13.5,-.5);ctx.lineTo(12.5,1.3);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(60,45,35,.75)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(12.5,1.3);ctx.lineTo(12.5,2.6);ctx.stroke();
+    ctx.beginPath();ctx.arc(10.8,2.6,1.8,0,Math.PI);ctx.stroke();
+    ctx.beginPath();ctx.arc(14.2,2.6,1.8,0,Math.PI);ctx.stroke();
+    // 胡须
+    ctx.strokeStyle='rgba(80,65,50,.5)';ctx.lineWidth=.8;
+    for(const yy of[-1,1.5,4]){ctx.beginPath();ctx.moveTo(14,yy);ctx.lineTo(21,yy-1.5);ctx.stroke();ctx.beginPath();ctx.moveTo(14,yy);ctx.lineTo(20.5,yy+1);ctx.stroke();}
+    // 前爪 + 小绒尾
+    ctx.fillStyle='#f3ece0';ctx.strokeStyle='#30271f';ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.ellipse(3,RR-1,4,2.8,0,0,6.2832);ctx.fill();ctx.stroke();
+    ctx.beginPath();ctx.ellipse(-4,RR-1,3.4,2.6,0,0,6.2832);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#fff8ee';ctx.beginPath();ctx.arc(-11,3,4.4,0,6.2832);ctx.fill();ctx.stroke();
+    // 围巾（爆气时变朱砂并带飘尾）
+    ctx.fillStyle=burstTimer>0?'#d85b45':'#6b3030';
+    ctx.beginPath();ctx.moveTo(-9,7);ctx.quadraticCurveTo(0,10,11,7);ctx.lineTo(11,10);ctx.quadraticCurveTo(0,13,-9,10);ctx.closePath();ctx.fill();
+    ctx.beginPath();ctx.moveTo(5,10);ctx.lineTo(11,19);ctx.lineTo(7,11);ctx.closePath();ctx.fill();
     ctx.restore();
   }
 
@@ -610,47 +646,62 @@ function drawRiver(){
   ctx.fillRect(0,H*.82,W,H*.18);
   ctx.restore();
 }
-// 远景竹林 (P220: 质感升级 — 渐变竹竿+节环+远景粒子)
-function drawFarBamboo(){
-  ctx.save();ctx.globalAlpha=.22;
-  // 远景竹影：粗细交替，营造纵深
-  for(let x=20;x<W;x+=27){
-    const sway=Math.sin(frame*.004+x)*4;
-    const vw= (Math.floor(x/54)%2)?10:15;  // 深浅交替
-    // 渐变竹竿（左暗右亮）
-    const g=ctx.createLinearGradient(x+sway,0,x+sway+vw,0);
-    g.addColorStop(0,'#1a2e18');g.addColorStop(.4,'#2c4524');g.addColorStop(1,'#131f10');
-    ctx.fillStyle=g;ctx.fillRect(x+sway,0,vw,H*.85);
-    // 竹节
-    ctx.fillStyle='rgba(14,24,12,.55)';
-    for(let y=24;y<H*.82;y+=46)ctx.fillRect(x+sway-1,y,vw+2,3);
-    // 节间高光（左侧细亮线）
-    ctx.fillStyle='rgba(200,230,170,.12)';ctx.fillRect(x+sway+vw*.2,0,2,H*.85);
-    // 上方竹叶（两三叶）
-    if((x/54)%2){
-      ctx.fillStyle='rgba(30,55,25,.8)';
-      ctx.beginPath();ctx.moveTo(x+sway+vw/2,6);
-      ctx.quadraticCurveTo(x+sway+vw+6,16,x+sway+vw+2,30);ctx.quadraticCurveTo(x+sway+vw-4,22,x+sway+vw/2,6);ctx.fill();
-      ctx.beginPath();ctx.moveTo(x+sway+vw/2,6);
-      ctx.quadraticCurveTo(x+sway-6,14,x+sway-3,28);ctx.quadraticCurveTo(x+sway+3,20,x+sway+vw/2,6);ctx.fill();
+// 远景竹林 (P223: 整层烘焙到离屏画布一次，每帧仅 drawImage，彻底去掉逐竿渐变)
+let farBambooSpr=null;
+function bakeFarBamboo(){
+  const c=document.createElement('canvas');c.width=W+60;c.height=Math.round(H*.86);
+  const g=c.getContext('2d');g.globalAlpha=1;
+  for(let x=10;x<W+50;x+=27){
+    const vw=(Math.floor(x/54)%2)?10:15;
+    const lg=g.createLinearGradient(x,0,x+vw,0);
+    lg.addColorStop(0,'#1a2e18');lg.addColorStop(.4,'#2c4524');lg.addColorStop(1,'#131f10');
+    g.fillStyle=lg;g.fillRect(x,0,vw,c.height);
+    g.fillStyle='rgba(14,24,12,.55)';
+    for(let y=24;y<c.height-6;y+=46)g.fillRect(x-1,y,vw+2,3);
+    g.fillStyle='rgba(200,230,170,.12)';g.fillRect(x+vw*.2,0,2,c.height);
+    if(Math.floor(x/54)%2){
+      g.fillStyle='rgba(30,55,25,.85)';
+      g.beginPath();g.moveTo(x+vw/2,6);g.quadraticCurveTo(x+vw+6,16,x+vw+2,30);g.quadraticCurveTo(x+vw-4,22,x+vw/2,6);g.fill();
+      g.beginPath();g.moveTo(x+vw/2,6);g.quadraticCurveTo(x-6,14,x-3,28);g.quadraticCurveTo(x+3,20,x+vw/2,6);g.fill();
     }
   }
+  return c;
+}
+function drawFarBamboo(){
+  if(!farBambooSpr)farBambooSpr=bakeFarBamboo();
+  ctx.save();ctx.globalAlpha=.22;
+  const sway=Math.sin(frame*.004)*4;
+  ctx.drawImage(farBambooSpr,-30+sway,0);
   ctx.restore();
 }
-// 竹子质感绘制 (P218) — 渐变竹段 + 透明节环 + 高光 + 暗边
+// P223: 竹竿贴图条 — 一个 52×46 周期纹理烘焙一次，之后每帧只 drawImage，零渐变
+let bambooTileSpr=null;
+const TILE_W=52,TILE_H=46;
+function bakeBambooTile(){
+  const c=document.createElement('canvas');c.width=TILE_W;c.height=TILE_H;
+  const g=c.getContext('2d');
+  const lg=g.createLinearGradient(0,0,TILE_W,0);
+  lg.addColorStop(0,'#26401e');lg.addColorStop(.32,'#3a5a2c');lg.addColorStop(.52,'#4e7639');lg.addColorStop(.78,'#39582b');lg.addColorStop(1,'#213319');
+  g.fillStyle=lg;g.fillRect(0,0,TILE_W,TILE_H);
+  g.fillStyle='rgba(225,242,185,.22)';g.fillRect(TILE_W*.17,0,3,TILE_H);      // 中脊高光
+  g.fillStyle='rgba(255,255,255,.10)';g.fillRect(TILE_W*.17+.5,0,1,TILE_H);   // 高光芯
+  g.fillStyle='rgba(9,18,7,.4)';g.fillRect(TILE_W*.86,0,TILE_W*.14,TILE_H);   // 右暗边
+  g.strokeStyle='rgba(9,18,7,.6)';g.lineWidth=1.6;g.beginPath();g.moveTo(0,TILE_H-2);g.lineTo(TILE_W,TILE_H-2);g.stroke(); // 节环暗线
+  g.strokeStyle='rgba(196,224,152,.32)';g.lineWidth=1;g.beginPath();g.moveTo(2,TILE_H+.5);g.lineTo(TILE_W-2,TILE_H+.5);g.stroke(); // 节上亮线
+  g.fillStyle='rgba(38,58,28,.9)';g.fillRect(-1,TILE_H-5,4,7);g.fillRect(TILE_W-3,TILE_H-5,4,7); // 两侧节瘤
+  return c;
+}
 function drawBambooStalk(x,y,w,h){
   if(h<4)return;
-  const g=ctx.createLinearGradient(x,0,x+w,0);
-  g.addColorStop(0,'#27401f');g.addColorStop(.3,'#3a5a2c');g.addColorStop(.5,'#4a7038');g.addColorStop(.75,'#3a5c2c');g.addColorStop(1,'#23361c');
-  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
-  ctx.fillStyle='rgba(220,240,180,.20)';ctx.fillRect(x+w*.18,y,3,h);
-  ctx.fillStyle='rgba(10,20,8,.35)';ctx.fillRect(x+w*.85,y,w*.15,h);
-  const segGap=46;
-  for(let yy=y+segGap/2;yy<y+h-segGap/2;yy+=segGap){
-    ctx.strokeStyle='rgba(10,20,8,.55)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x,yy-1.5);ctx.lineTo(x+w,yy-1.5);ctx.stroke();
-    ctx.strokeStyle='rgba(190,220,150,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x+2,yy+1);ctx.lineTo(x+w-2,yy+1);ctx.stroke();
-    ctx.fillStyle='rgba(40,60,30,.7)';ctx.fillRect(x-1,yy-3,4,6);ctx.fillRect(x+w-3,yy-3,4,6);
+  if(!bambooTileSpr)bambooTileSpr=bakeBambooTile();
+  const off=(frame*1.3)%TILE_H; // 让节纹随推进滚动，竹子"活"起来
+  for(let yy=y-TILE_H+off%TILE_H;yy<y+h;yy+=TILE_H){
+    const ty=Math.max(y,yy),bh=Math.min(TILE_H,y+h-ty);
+    if(bh<=0)continue;
+    ctx.drawImage(bambooTileSpr,x,ty,w,bh);
   }
+  // 断口/上下边缘暗线，强化立体
+  ctx.fillStyle='rgba(6,12,5,.5)';ctx.fillRect(x,y,2,Math.min(h,6));
 }
 // P219: 竹腔断口 — 椭圆切面、内壁暗色、竹肉高光
 function drawBambooCap(x,w,y){
@@ -762,7 +813,17 @@ function retry(){overScreen.style.display='none';startGame();}
 $('startBtn').addEventListener('click',startGame);
 $('retryBtn').addEventListener('click',retry);
 
-function fit(){const s=Math.min(innerWidth/W,innerHeight/H);cvs.style.width=(W*s)+'px';cvs.style.height=(H*s)+'px';}
+// P223: fit 同步 DPR — 高分屏清晰，且窗口变化时重建 backing store
+function fit(){
+  DPR=Math.min(window.devicePixelRatio||1,2.5);
+  const bw=Math.round(W*DPR),bh=Math.round(H*DPR);
+  if(cvs.width!==bw||cvs.height!==bh){cvs.width=bw;cvs.height=bh;}
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  paperPat=null;vig=null; // DPR变后缓存失效，重建
+  const s=Math.min(innerWidth/W,innerHeight/H);
+  cvs.style.width=(W*s)+'px';cvs.style.height=(H*s)+'px';
+}
 addEventListener('resize',fit);fit();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},get shield(){return rabbit.shield},addShield(){rabbit.shield=Math.min(3,rabbit.shield+1)},hitOnce(){const s=rabbit.shield;invincible=0;burstTimer=0;const ok=takeHit();return {before:s,after:rabbit.shield,blocked:ok}},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};

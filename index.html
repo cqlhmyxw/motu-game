@@ -156,7 +156,7 @@ function reset(){
   for(let i=0;i<8;i++) fireflies.push({x:Math.random()*W,y:60+Math.random()*260,ph:Math.random()*6.28,s:0.3+Math.random()*0.8,r:1.5+Math.random()*2});
   score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;
   season=0;seasonParts=[];blessTimer=0;trail=[];
-  menuBamboo=[];menuSparkles=[];__menuTick=0;   // P224: 进入游戏清理菜单装饰残留
+  menuBamboo=[];menuSparkles=[];__menuTick=0;inkTrail=[];magLines=[];   // P225: 清理菜单装饰+墨迹+磁铁线
   scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';hudShield.textContent='';
   skillBar.style.background='linear-gradient(90deg,#c8a870,#e8c040)';
 }
@@ -225,7 +225,23 @@ function spawnBamboo(){
 // P223: 物理改为 dt 驱动（dt=本帧耗时/16.67ms，钳制2.5防跳帧）——帧率波动不再影响速度
 function update(dt,now){
   const D=diff();
-  frame+=dt;
+  frame+=dt;   // 全局帧计数，供动画/节气等依赖
+  // P225: 墨迹轨迹（兔子移动时持续输出脚印）
+  pushInkTrail();
+  // P225: 磁铁道具效果——若兔子在币群密集区（120px 内有 ≥3 枚 coin），自动把币吸过来
+  if(st==='play'){
+    for(let i=pickups.length-1;i>=0;i--){
+      const p=pickups[i];
+      if(p.kind==='coin'||p.kind==='pearl'){
+        const dx=rabbit.x-p.x,dy=rabbit.y-p.y;
+        const d2=dx*dx+dy*dy;
+        if(d2<32400&&Math.random()<.32){ // 360px 内 32% 吸近一步
+          addMagLine(p.x,p.y,rabbit.x,rabbit.y);
+          p.x+=dx*.08; p.y+=dy*.08;
+        }
+      }
+    }
+  }
   if(burstTimer>0){
     burstTimer-=dt;
     if(burstTimer<=0){burstTimer=0;invincible=0;skillLbl.style.color='#c8a870';skillLbl.textContent='技';}
@@ -281,6 +297,7 @@ function update(dt,now){
   }
   if(comboTimer>0){comboTimer-=dt;if(comboTimer<=0)comboN=0;}
   if(invincible>0&&burstTimer<=0){invincible-=dt;if(invincible<0)invincible=0;}
+  for(let i=magLines.length-1;i>=0;i--){const m=magLines[i];m.life-=dt;if(m.life<=0)magLines.splice(i,1);}
   for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx*dt;q.y+=q.vy*dt;if(!q.txt)q.vy+=.12*dt;q.life-=dt;if(q.life<=0)particles.splice(i,1);}
   // P222: 冲击波推进
   for(let i=shockwaves.length-1;i>=0;i--){const w=shockwaves[i];w.r+=7*dt;w.life-=.055*dt;if(w.life<=0)shockwaves.splice(i,1);}
@@ -351,7 +368,7 @@ function spawnMenuBamboo(){
   if(menuBamboo.length>8)return;
   const gapY=120+Math.random()*(H-300);
   menuBamboo.push({x:W+40,w:52,gapY:gapY,gap:140+Math.random()*50,speed:1.8+Math.random()*.6});
-  if(Math.random()<.35)menuSparkles.push({x:W+40,y:gapY+(Math.random()-.5)*80,life:120,col:'#e8c040'});
+  if(Math.random()<.55)menuSparkles.push({x:W+40,y:gapY+(Math.random()-.5)*60,life:150,col:'#e8c040'});
 }
 function drawMenuFx(now){
   // P224: 纯渲染（移动统一在loop里做）— 装饰竹+引诱金币
@@ -368,6 +385,27 @@ function drawMenuFx(now){
   }
   ctx.globalAlpha=1;
 }
+let magLines=[];
+function addMagLine(x1,y1,x2,y2){magLines.push({x1,y1,x2,y2,life:8});}
+// P225: 墨迹轨迹 —— 兔子脚底的水墨尾迹（无论季节，都能看到跑路的痕迹）
+let inkTrail=[];
+function pushInkTrail(){
+  inkTrail.push({x:rabbit.x-8,y:rabbit.y+12,life:22,col:'rgba(70,70,70,.42)'});
+  if(inkTrail.length>12)inkTrail.shift();
+}
+function drawInkTrail(){
+  for(let i=inkTrail.length-1;i>=0;i--){
+    const t=inkTrail[i];t.life-=1.4;
+    if(t.life<=0){inkTrail.splice(i,1);continue;}
+    ctx.globalAlpha=Math.max(.2,t.life/22);
+    ctx.fillStyle=t.col;
+    ctx.beginPath();
+    ctx.ellipse(t.x,t.y,3+Math.random()*2,2+Math.random()*1.5,0,0,6.2832);
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
 function updateSeasonFx(now,dt){
   dt=dt||1;
   advanceSeason();
@@ -542,6 +580,8 @@ function draw(){
 
   // 兔子 + 轨迹
   if(st==='play'||st==='dead'){
+    // P225: 墨迹轨迹画在兔子下面（世界坐标，需在 translate 前）
+    if(st==='play')drawInkTrail();
     ctx.save();ctx.translate(rabbit.x,rabbit.y);ctx.rotate(rabbit.rot);
     if(burstTimer>0){
       const glow=.4+.6*(.5+.5*Math.sin(frame*.3));
@@ -643,6 +683,9 @@ function draw(){
 
   // P217: 节气粒子层——花瓣/雨丝/落叶/雪花 (v1.7)
   drawSeasonFx();
+
+  // P225: 磁铁拉伸线 — 消磁
+  magLines.forEach(m=>{ctx.save();ctx.globalAlpha=Math.max(.15,m.life/8);ctx.strokeStyle='rgba(170,220,100,'+(m.life/8)+')';ctx.lineWidth=1.5+1.5*(m.life/8);ctx.beginPath();ctx.moveTo(m.x1,m.y1);ctx.lineTo(m.x2,m.y2);ctx.stroke();ctx.restore();});
 
   // 粒子
   particles.forEach(q=>{ctx.globalAlpha=Math.min(1,q.life/22);ctx.fillStyle=q.col;if(q.txt){ctx.font='bold 16px KaiTi';ctx.textAlign='center';ctx.fillText(q.txt,q.x,q.y);}else{ctx.beginPath();ctx.arc(q.x,q.y,q.r||3,0,6.2832);ctx.fill();}});
@@ -839,7 +882,12 @@ addEventListener('keydown',e=>{
 
 // ============ 流程控制 ============
 function startGame(){
-  reset();st='play';startScreen.style.display='none';overScreen.style.display='none';hud.style.display='flex';spawnBamboo();
+  reset();
+  st='play';
+  // P225: 开局 2 秒无敌，给玩家适应新节奏 & 防首屏撞亡
+  invincible=120;
+  startScreen.style.display='none';overScreen.style.display='none';hud.style.display='flex';
+  spawnBamboo();
 }
 function pauseGame(){if(st!=='play')return;st='pause';comboEl.textContent='暂 停 · 点击继续';comboEl.classList.add('show');}
 function resume(){if(st!=='pause')return;st='play';comboEl.classList.remove('show');}

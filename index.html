@@ -158,30 +158,34 @@ function takeHit(){
 // ============ 生成 ============
 function spawnBamboo(){
   const D=diff();
-  const gapY=90+Math.random()*(H-180-D.gap);
+  // P220: gapY 边界校准 — 保证上下各保留 70px 空隙给玩家安全区域
+  const gapY=Math.max(80, Math.min(H-100, 90+Math.random()*(H-250-D.gap)));
   const isDouble=score>=25&&Math.random()<Math.min(.2,(score-25)*0.005);
   if(isDouble){
     const subGap=60+Math.random()*70;
-    const subY=gapY+gapY/2+(Math.random()-.5)*80;
+    const subY=Math.max(100, Math.min(H-120, gapY+gapY/2+(Math.random()-.5)*80));
     bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
     bamboo.push({x:W+40+70,w:52,gapY:subY+subGap/2+subGap,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
   } else {
     bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:D.gap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false});
   }
-  // P217: 夜间天灯节 — 每150分召唤天灯群
+  // P217: 夜间天灯节
   if(score%40===39&&dayPhase>.55){
     for(let i=0;i<5;i++)lanterns.push({x:W+20+Math.random()*80,y:H+10+Math.random()*60,ph:Math.random()*6.28});
   }
   if(st==='play'){
-    // P215: 前3根竹子保底出 符纸→灵草→萝卜，让新道具一定被看到
+    // P220: 道具绑定竹竿 — 跟随该竿间隙中心移动，永远不会嵌进墙里
+    const stalk=bamboo[bamboo.length-1];
+    const half=Math.max(12,stalk.gap/2-16);
+    const put=(off,kind)=>pickups.push({x:stalk.x+stalk.w/2,y:stalk.gapY+Math.max(-half,Math.min(half,off)),off:Math.max(-half,Math.min(half,off)),ref:stalk,kind,ph:Math.random()*6});
     const forced=['shield','herb','radish'][Math.min(score,2)];
-    if(score<3&&forced){ pickups.push({x:W+40+26,y:gapY+D.gap/2,kind:forced,ph:0}); }
+    if(score<3&&forced)put(0,forced);
     const r=Math.random();
-    if(score>=3&&r<.44){ for(let i=0;i<3;i++) pickups.push({x:W+40+26,y:gapY+D.gap/2+(i-1)*34,kind:'coin',ph:Math.random()*6}); }
-    else if(r<.60){ pickups.push({x:W+40+26,y:gapY-46,kind:'pearl',ph:0}); }
-    else if(r<.74){ pickups.push({x:W+40+26,y:gapY+D.gap/2,kind:'shield',ph:0}); }
-    else if(r<.87){ pickups.push({x:W+40+26,y:gapY-30,kind:'radish',ph:0}); }
-    else { pickups.push({x:W+40+26,y:gapY+D.gap/2-20,kind:'herb',ph:0}); }
+    if(score>=3&&r<.40){put(-34,'coin');put(0,'coin');put(34,'coin');}
+    else if(r<.54)put(-40,'pearl');
+    else if(r<.68)put(0,'shield');
+    else if(r<.82)put(-28,'radish');
+    else put(18,'herb');
   }
 }
 
@@ -218,7 +222,18 @@ function update(dt,now){
     if(b.x+b.w<-30)bamboo.splice(i,1);
   }
   for(let i=pickups.length-1;i>=0;i--){
-    const p=pickups[i];p.x-=D.speed;p.ph+=.1;
+    const p=pickups[i];
+    p.ph+=.1;
+    // P220: 道具坐标完全绑定竹竿 — 跟随其间隙中心，绝不会再嵌进墙里
+    if(p.ref){
+      if(bamboo.indexOf(p.ref)<0){pickups.splice(i,1);continue;} // 竹竿被清屏/移出 → 道具同灭
+      // 道具贴靠竹竿内壁（x 放竿左缘+小偏移），y 跟随间隙轨道，避免挡穿越口
+      p.x=p.ref.x+p.ref.w*0.2;
+      p.y=p.ref.gapY+p.off;
+      if(p.ref.x+p.ref.w<-20)pickups.splice(i,1);
+    } else {
+      p.x-=D.speed;
+    }
     const dx=p.x-rabbit.x,dy=p.y-rabbit.y;
     if(dx*dx+dy*dy<(RR+11)*(RR+11)){
       if(p.kind==='coin'){comboN++;comboTimer=90;let gain=1+Math.floor(comboN/5);if(doubleCoinTimer>0)gain*=2;score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);
@@ -517,13 +532,30 @@ function drawRiver(){
   ctx.fillRect(0,H*.82,W,H*.18);
   ctx.restore();
 }
-// 远景竹林 (新 v1.5)
+// 远景竹林 (P220: 质感升级 — 渐变竹竿+节环+远景粒子)
 function drawFarBamboo(){
-  ctx.save();ctx.globalAlpha=.18;
-  for(let x=30;x<W;x+=35){
-    const sway=Math.sin(frame*.008+x)*3;
-    ctx.fillStyle='#2d4a33';ctx.fillRect(x+sway,0,12,H*.82);
-    for(let y=20;y<H*.8;y+=38)ctx.fillRect(x+sway,y,12,4);
+  ctx.save();ctx.globalAlpha=.22;
+  // 远景竹影：粗细交替，营造纵深
+  for(let x=20;x<W;x+=27){
+    const sway=Math.sin(frame*.004+x)*4;
+    const vw= (Math.floor(x/54)%2)?10:15;  // 深浅交替
+    // 渐变竹竿（左暗右亮）
+    const g=ctx.createLinearGradient(x+sway,0,x+sway+vw,0);
+    g.addColorStop(0,'#1a2e18');g.addColorStop(.4,'#2c4524');g.addColorStop(1,'#131f10');
+    ctx.fillStyle=g;ctx.fillRect(x+sway,0,vw,H*.85);
+    // 竹节
+    ctx.fillStyle='rgba(14,24,12,.55)';
+    for(let y=24;y<H*.82;y+=46)ctx.fillRect(x+sway-1,y,vw+2,3);
+    // 节间高光（左侧细亮线）
+    ctx.fillStyle='rgba(200,230,170,.12)';ctx.fillRect(x+sway+vw*.2,0,2,H*.85);
+    // 上方竹叶（两三叶）
+    if((x/54)%2){
+      ctx.fillStyle='rgba(30,55,25,.8)';
+      ctx.beginPath();ctx.moveTo(x+sway+vw/2,6);
+      ctx.quadraticCurveTo(x+sway+vw+6,16,x+sway+vw+2,30);ctx.quadraticCurveTo(x+sway+vw-4,22,x+sway+vw/2,6);ctx.fill();
+      ctx.beginPath();ctx.moveTo(x+sway+vw/2,6);
+      ctx.quadraticCurveTo(x+sway-6,14,x+sway-3,28);ctx.quadraticCurveTo(x+sway+3,20,x+sway+vw/2,6);ctx.fill();
+    }
   }
   ctx.restore();
 }

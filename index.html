@@ -518,7 +518,7 @@ function loop(now){
 requestAnimationFrame(loop);
 
 // ============ 输入 ============
-function jump(){if(st==='play'){rabbit.v=JUMP;sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);}}
+function jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);}}
 function tap(e){
   if(st==='pause'){resume();e&&e.preventDefault&&e.preventDefault();return;}
   if(st==='menu'||st==='dead')return;

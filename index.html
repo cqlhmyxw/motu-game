@@ -162,6 +162,7 @@ function reset(){
   score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;__craneAt=0;
   season=0;seasonParts=[];blessTimer=0;trail=[];
   menuBamboo=[];menuSparkles=[];__menuTick=0;inkTrail=[];magLines=[];   // P225: 清理菜单装饰+墨迹+磁铁线
+  deathInkPoints=[];ghostTrail=[];ripples=[];doomBloom=null;coinRain=null;crane=null;   // P235: 清理死亡墨画+残影+涟漪
   scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';hudShield.textContent='';
   skillBar.style.background='linear-gradient(90deg,#c8a870,#e8c040)';
 }
@@ -425,7 +426,38 @@ function drawDoomBloom(){
   ctx.restore();
   if(doomBloom.life>=doomBloom.max)doomBloom=null;
 }
-function hit(){sfx.die();vib([40,30,90]);shake=18;puff(rabbit.x,rabbit.y,'#2a2a2a',28);spawnDoomBloom(rabbit.x,rabbit.y);st='dead';setTimeout(showOver,700);}
+// P235: 死亡墨画 —— 失败时分数化作水墨散点缓缓晕开
+let deathInkPoints=[];
+function drawDeathInk(){
+  if(st!=='dead'||!deathInkPoints.length)return;
+  for(let i=deathInkPoints.length-1;i>=0;i--){
+    const d=deathInkPoints[i];d.age++;
+    if(d.age>d.life){deathInkPoints.splice(i,1);continue;}
+    const k=d.age/d.life;
+    // 墨点缓慢扩张 + 淡出（像墨在宣纸上洇开）
+    const grow=Math.min(1,d.age/22);
+    const rad=(8+d.scale*22)*grow;
+    ctx.save();
+    ctx.globalAlpha=(1-k)*0.32;
+    const g=ctx.createRadialGradient(d.x,d.y,1,d.x,d.y,rad);
+    g.addColorStop(0,d.col);g.addColorStop(.6,'rgba(60,58,55,'+(1-k)*.4+')');g.addColorStop(1,'rgba(60,58,55,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath();ctx.arc(d.x,d.y,rad,0,6.2832);ctx.fill();
+    ctx.restore();
+  }
+}
+function hit(){
+  sfx.die();vib([40,30,90]);shake=18;puff(rabbit.x,rabbit.y,'#2a2a2a',28);
+  spawnDoomBloom(rabbit.x,rabbit.y);
+  // P235: 死亡墨画 —— 按分数+连击+季节生成水墨散点
+  deathInkPoints=[];
+  const totalPts=(score+comboN*3+1);
+  for(let i=0;i<totalPts;i++){
+    const a=Math.random()*6.2832,r=Math.random()*60+20;
+    deathInkPoints.push({x:rabbit.x+Math.cos(a)*r,y:rabbit.y+Math.sin(a)*r,ph:Math.random()*6.2832,scale:0.3+Math.random()*.4,age:0,life:180+Math.random()*120,col:SEASONS[season].pc});
+  }
+  st='dead';setTimeout(showOver,700);
+}
 
 function puff(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*6.2832,s=1+Math.random()*3.4;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-1.2,life:18+Math.random()*22,r:2+Math.random()*4,col});}}
 function floatText(x,y,txt){particles.push({x,y,vx:0,vy:-1.1,life:34,txt,col:'#8b6a1a'});}
@@ -866,6 +898,9 @@ function draw(){
 
   // P217: 节气粒子层——花瓣/雨丝/落叶/雪花 (v1.7)
   drawSeasonFx();
+
+  // P235: 死亡墨画（失败时水墨散点缓缓晕开，成为一幅小水墨画）
+  drawDeathInk();
 
   // P228: 落地荡漾 & 云中鹤飞掠
   drawRipples();

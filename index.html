@@ -149,7 +149,7 @@ const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
 
 function reset(){
-  rabbit={x:90,y:H*0.42,v:0,rot:0,shield:0};
+  rabbit={x:90,y:H*0.42,v:0,rot:0,shield:0,jumps:0};
   bamboo=[];pickups=[];particles=[];clouds=[];
   stars=[];fireflies=[];lanterns=[];
   for(let i=0;i<4;i++) clouds.push({x:Math.random()*W,y:40+Math.random()*160,s:.15+Math.random()*.2,w:60+Math.random()*80});
@@ -266,6 +266,8 @@ function update(dt,now){
     // P228: 落地墨点涟漪 —— 首次着地（此前在空中）才触发
     if(!rabbit.onGround){rabbit.onGround=true;ripple(rabbit.x,H-RR+4,'rgba(60,60,65,.5)');}
     rabbit.y=H-RR;
+    // P231: 落地重置双跳计数
+    rabbit.jumps=0;
     if(!takeHit()){hit();return;}
     rabbit.v=-3.2; // P215: 护盾/无敌触发后弹离底部，避免下一帧重复撞击
     rabbit.onGround=false;
@@ -1014,7 +1016,23 @@ function loop(now){
 requestAnimationFrame(loop);
 
 // ============ 输入 ============
-function jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);}}
+function jump(){
+  if(st!=='play')return;
+  if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}
+  // P231: 双跳 —— 地面跳不受限，空中只允许1段二段跳（弱跳，80%力度）
+  if(rabbit.y<H-RR-2){
+    if(rabbit.jumps>=1)return;
+    rabbit.jumps++;
+    rabbit.v=JUMP*.8;
+    // 二段跳特效：脚下墨花+涟漪
+    puff(rabbit.x-8,rabbit.y+8,'#8a7f70',5);
+    ripple(rabbit.x,rabbit.y+6,'rgba(150,140,125,.45)');
+  } else {
+    rabbit.jumps=0;
+    rabbit.v=JUMP;
+  }
+  sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);
+}
 function tap(e){
   if(st==='pause'){resume();e&&e.preventDefault&&e.preventDefault();return;}
   if(st==='menu'||st==='dead')return;
@@ -1096,7 +1114,7 @@ function fit(){
 }
 addEventListener('resize',fit);fit();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},get shield(){return rabbit.shield},get menu(){return{frame:Math.round(frame),bamboo:menuBamboo.length,spark:menuSparkles.length,tier:__tier,dpr:DPR}},get combo(){return comboN},get doom(){return doomBloom?{burst:doomBloom.burst,life:Math.round(doomBloom.life),petals:doomBloom.petals.length}:null},setCombo(n){comboN=n;comboTimer=90;},killSelf(){invincible=0;burstTimer=0;rabbit.shield=0;hit();},addShield(){rabbit.shield=Math.min(3,rabbit.shield+1)},hitOnce(){const s=rabbit.shield;invincible=0;burstTimer=0;const ok=takeHit();return {before:s,after:rabbit.shield,blocked:ok}},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
+window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},get shield(){return rabbit.shield},get menu(){return{frame:Math.round(frame),bamboo:menuBamboo.length,spark:menuSparkles.length,tier:__tier,dpr:DPR}},get combo(){return comboN},get jumps(){return rabbit.jumps},get ry(){return Math.round(rabbit.y)},get rv(){return Math.round(rabbit.v*100)/100},get doom(){return doomBloom?{burst:doomBloom.burst,life:Math.round(doomBloom.life),petals:doomBloom.petals.length}:null},setCombo(n){comboN=n;comboTimer=90;},killSelf(){invincible=0;burstTimer=0;rabbit.shield=0;hit();},addShield(){rabbit.shield=Math.min(3,rabbit.shield+1)},hitOnce(){const s=rabbit.shield;invincible=0;burstTimer=0;const ok=takeHit();return {before:s,after:rabbit.shield,blocked:ok}},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
 })();
 </script>
 </body>

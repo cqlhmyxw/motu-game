@@ -378,17 +378,18 @@ function ensureAtmos(){
     vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(.75,'rgba(10,8,5,.14)');vig.addColorStop(1,'rgba(8,6,3,.4)');}
 }
 function drawAmbience(){
+  if(!atmosOn)return; // P223b: 弱机自动关闭氛围层
   ensureAtmos();
   // 宣纸颗粒（pattern 缓存，一次 fill）
-  ctx.save();ctx.globalAlpha=.045;ctx.fillStyle=paperPat;ctx.fillRect(0,0,W,H);ctx.restore();
+  ctx.save();ctx.globalAlpha=.045;ctx.fillStyle=paperPat;ctx.fillRect(-20,-20,W+40,H+40);ctx.restore();
   // 季节薄雾（唯一的每帧渐变，且复用对象）
   const fy=H*.66+Math.sin(performance.now()*.0004)*18;
   const t=season===3?['rgba(235,240,250,.13)','rgba(235,240,250,0)']:season===1?['rgba(200,220,235,.10)','rgba(200,220,235,0)']:['rgba(242,238,228,.08)','rgba(242,238,228,0)'];
   const fg=ctx.createLinearGradient(0,fy-60,0,fy+90);
   fg.addColorStop(0,t[1]);fg.addColorStop(.5,t[0]);fg.addColorStop(1,t[1]);
-  ctx.fillStyle=fg;ctx.fillRect(0,fy-60,W,150);
+  ctx.fillStyle=fg;ctx.fillRect(-20,fy-60,W+40,150);
   // 暗角晕影（缓存的渐变）
-  ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=vig;ctx.fillRect(-20,-20,W+40,H+40);
 }
 function draw(){
   ctx.save();
@@ -646,19 +647,20 @@ function drawRiver(){
   ctx.fillRect(0,H*.82,W,H*.18);
   ctx.restore();
 }
-// 远景竹林 (P223: 整层烘焙到离屏画布一次，每帧仅 drawImage，彻底去掉逐竿渐变)
+// 远景竹林 (P223: 整层烘焙到离屏画布一次，每帧仅 drawImage；按DPR烘焙保清晰)
 let farBambooSpr=null;
 function bakeFarBamboo(){
-  const c=document.createElement('canvas');c.width=W+60;c.height=Math.round(H*.86);
-  const g=c.getContext('2d');g.globalAlpha=1;
+  const pw=Math.round((W+60)*DPR),ph=Math.round(H*.86*DPR);
+  const c=document.createElement('canvas');c.width=pw;c.height=ph;
+  const g=c.getContext('2d');g.setTransform(DPR,0,0,DPR,0,0);
   for(let x=10;x<W+50;x+=27){
     const vw=(Math.floor(x/54)%2)?10:15;
     const lg=g.createLinearGradient(x,0,x+vw,0);
     lg.addColorStop(0,'#1a2e18');lg.addColorStop(.4,'#2c4524');lg.addColorStop(1,'#131f10');
-    g.fillStyle=lg;g.fillRect(x,0,vw,c.height);
+    g.fillStyle=lg;g.fillRect(x,0,vw,H*.86);
     g.fillStyle='rgba(14,24,12,.55)';
-    for(let y=24;y<c.height-6;y+=46)g.fillRect(x-1,y,vw+2,3);
-    g.fillStyle='rgba(200,230,170,.12)';g.fillRect(x+vw*.2,0,2,c.height);
+    for(let y=24;y<H*.86-6;y+=46)g.fillRect(x-1,y,vw+2,3);
+    g.fillStyle='rgba(200,230,170,.12)';g.fillRect(x+vw*.2,0,2,H*.86);
     if(Math.floor(x/54)%2){
       g.fillStyle='rgba(30,55,25,.85)';
       g.beginPath();g.moveTo(x+vw/2,6);g.quadraticCurveTo(x+vw+6,16,x+vw+2,30);g.quadraticCurveTo(x+vw-4,22,x+vw/2,6);g.fill();
@@ -671,15 +673,15 @@ function drawFarBamboo(){
   if(!farBambooSpr)farBambooSpr=bakeFarBamboo();
   ctx.save();ctx.globalAlpha=.22;
   const sway=Math.sin(frame*.004)*4;
-  ctx.drawImage(farBambooSpr,-30+sway,0);
+  ctx.drawImage(farBambooSpr,-30+sway,0,W+60,H*.86);
   ctx.restore();
 }
 // P223: 竹竿贴图条 — 一个 52×46 周期纹理烘焙一次，之后每帧只 drawImage，零渐变
 let bambooTileSpr=null;
 const TILE_W=52,TILE_H=46;
 function bakeBambooTile(){
-  const c=document.createElement('canvas');c.width=TILE_W;c.height=TILE_H;
-  const g=c.getContext('2d');
+  const c=document.createElement('canvas');c.width=TILE_W*DPR;c.height=TILE_H*DPR;
+  const g=c.getContext('2d');g.setTransform(DPR,0,0,DPR,0,0);
   const lg=g.createLinearGradient(0,0,TILE_W,0);
   lg.addColorStop(0,'#26401e');lg.addColorStop(.32,'#3a5a2c');lg.addColorStop(.52,'#4e7639');lg.addColorStop(.78,'#39582b');lg.addColorStop(1,'#213319');
   g.fillStyle=lg;g.fillRect(0,0,TILE_W,TILE_H);
@@ -687,7 +689,7 @@ function bakeBambooTile(){
   g.fillStyle='rgba(255,255,255,.10)';g.fillRect(TILE_W*.17+.5,0,1,TILE_H);   // 高光芯
   g.fillStyle='rgba(9,18,7,.4)';g.fillRect(TILE_W*.86,0,TILE_W*.14,TILE_H);   // 右暗边
   g.strokeStyle='rgba(9,18,7,.6)';g.lineWidth=1.6;g.beginPath();g.moveTo(0,TILE_H-2);g.lineTo(TILE_W,TILE_H-2);g.stroke(); // 节环暗线
-  g.strokeStyle='rgba(196,224,152,.32)';g.lineWidth=1;g.beginPath();g.moveTo(2,TILE_H+.5);g.lineTo(TILE_W-2,TILE_H+.5);g.stroke(); // 节上亮线
+  g.strokeStyle='rgba(196,224,152,.32)';g.lineWidth=1;g.beginPath();g.moveTo(2,TILE_H-0.5);g.lineTo(TILE_W-2,TILE_H-0.5);g.stroke(); // 节上亮线
   g.fillStyle='rgba(38,58,28,.9)';g.fillRect(-1,TILE_H-5,4,7);g.fillRect(TILE_W-3,TILE_H-5,4,7); // 两侧节瘤
   return c;
 }
@@ -740,8 +742,35 @@ function drawHerb(x,y){
 
 // ============ 游戏循环 ============
 let last=0;
+// P223b: 性能自适应 — FPS低自动降DPR/砍特效，保流畅优先（老板铁律）
+let __fFrames=0,__fT0=0,__tier=(window.devicePixelRatio||1)>=2?2:1; // 2=全效果 1=无DPR 0=降DPR0.75+关氛围
+let atmosOn=true;
+function setAtmosOn(v){atmosOn=v;}
+function applyTier(){
+  const cap=({2:Math.min(window.devicePixelRatio||1,2.5),1:1,0:0.75})[__tier]||1;
+  DPR=Math.min(window.devicePixelRatio||1,cap);
+  const bw=Math.round(W*DPR),bh=Math.round(H*DPR);
+  if(cvs.width!==bw||cvs.height!==bh){cvs.width=bw;cvs.height=bh;}
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  paperTex=null;paperPat=null;vig=null;farBambooSpr=null;bambooTileSpr=null; // sprite按DPR重建
+  const s=Math.min(innerWidth/W,innerHeight/H);
+  cvs.style.width=(W*s)+'px';cvs.style.height=(H*s)+'px';
+  if(__tier<=0)setAtmosOn(false);
+}
+function perfTick(now){
+  __fFrames++;
+  if(!__fT0){__fT0=now;return;}
+  const el=now-__fT0;
+  if(el>=1500){
+    const fps=__fFrames*1000/el;
+    if(fps<42&&__tier>0){__tier--;applyTier();}
+    else if(fps<30&&__tier===1){__tier=0;applyTier();}
+    __fFrames=0;__fT0=now;
+  }
+}
 function loop(now){
   requestAnimationFrame(loop);
+  perfTick(now);
   const dt=Math.min((now-last)/16.667,2.5);last=now;
   if(st==='play'){update(dt,now);}
   else if(st==='dead'){for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx;q.y+=q.vy;if(!q.txt)q.vy+=.12;q.life--;if(q.life<=0)particles.splice(i,1);}if(shake>0)shake--;}

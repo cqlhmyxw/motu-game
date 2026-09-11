@@ -310,6 +310,18 @@ function update(dt,now){
     }
     if(p.x<-20)pickups.splice(i,1);
   }
+  // P232: 金币雨接住 —— 15枚接住翻倍，掉落硬币不消失，奖励惊喜
+  if(coinRain){
+    for(let i=coinRain.length-1;i>=0;i--){
+      const c=coinRain[i];c.vy+=.012*dt;c.y+=c.vy;c.life-=dt;if(c.life<=0){coinRain.splice(i,1);continue;}
+      const dx2=rabbit.x-c.x,dy2=rabbit.y-c.y;
+      if(dx2*dx2+dy2*dy2<(RR+12)*(RR+12)){
+        coinRain.splice(i,1);
+        score+=15;scoreTxt.textContent=score;sfx.coin();vib([30,15]);puff(c.x,c.y,'#e8c040',12);floatText(c.x,c.y-14,'+15');showCombo('✦ 金 雨 接 住 ✧15');
+        if(comboN<20){comboN+=3;comboTimer=120;} // 奖励连击
+      }
+    }
+  }
   if(comboTimer>0){comboTimer-=dt;if(comboTimer<=0)comboN=0;}
   if(invincible>0&&burstTimer<=0){invincible-=dt;if(invincible<0)invincible=0;}
   if(__eyeBoost>0){__eyeBoost-=dt;if(__eyeBoost<0)__eyeBoost=0;}
@@ -829,10 +841,9 @@ function draw(){
   // P225: 磁铁拉伸线 — 消磁
   magLines.forEach(m=>{ctx.save();ctx.globalAlpha=Math.max(.15,m.life/8);ctx.strokeStyle='rgba(170,220,100,'+(m.life/8)+')';ctx.lineWidth=1.5+1.5*(m.life/8);ctx.beginPath();ctx.moveTo(m.x1,m.y1);ctx.lineTo(m.x2,m.y2);ctx.stroke();ctx.restore();});
 
-  // P228: 爆气/15连击金币雨
+  // P228: 爆气/15连击金币雨（物理在 update，这里只画）
   if(coinRain){
-    for(let i=coinRain.length-1;i>=0;i--){
-      const c=coinRain[i];c.vy+=.012;c.y+=c.vy;c.life--;if(c.life<=0)coinRain.splice(i,1);
+    for(const c of coinRain){
       ctx.save();ctx.globalAlpha=c.life/180;
       ctx.fillStyle=c.col;ctx.beginPath();ctx.arc(c.x,c.y,3+c.i*.08,0,6.28);ctx.fill();
       ctx.fillStyle='rgba(50,45,40,.35)';ctx.beginPath();ctx.arc(c.x-1,c.y+2,1.5,0,6.28);ctx.fill();

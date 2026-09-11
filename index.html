@@ -389,6 +389,9 @@ function draw(){
     drawBambooStalk(b.x,0,b.w,topH);
     // 下段
     drawBambooStalk(b.x,botY,b.w,H-botY);
+    // P219: 竹腔断口（间隙上下切口，空心竹质感）
+    drawBambooCap(b.x,b.w,topH);
+    drawBambooCap(b.x,b.w,botY);
     // 双间隙标识 (新 v1.5)
     if(b.twin){
       ctx.strokeStyle='rgba(255,120,60,.4)';ctx.lineWidth=2;ctx.setLineDash([4,4]);
@@ -523,6 +526,15 @@ function drawBambooStalk(x,y,w,h){
     ctx.strokeStyle='rgba(190,220,150,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x+2,yy+1);ctx.lineTo(x+w-2,yy+1);ctx.stroke();
     ctx.fillStyle='rgba(40,60,30,.7)';ctx.fillRect(x-1,yy-3,4,6);ctx.fillRect(x+w-3,yy-3,4,6);
   }
+}
+// P219: 竹腔断口 — 椭圆切面、内壁暗色、竹肉高光
+function drawBambooCap(x,w,y){
+  if(y<=0||y>=H)return;
+  const cg=ctx.createRadialGradient(x+w*.36,y-1,1,x+w*.5,y,w*.52);
+  cg.addColorStop(0,'#8da064');cg.addColorStop(.45,'#526b3d');cg.addColorStop(.78,'#26391f');cg.addColorStop(1,'#152314');
+  ctx.fillStyle=cg;ctx.beginPath();ctx.ellipse(x+w*.5,y,w*.5,4,0,0,6.2832);ctx.fill();
+  ctx.strokeStyle='rgba(190,215,145,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(x+w*.5,y-1,w*.38,2.4,0,0,6.2832);ctx.stroke();
+  ctx.fillStyle='rgba(220,240,180,.45)';ctx.beginPath();ctx.arc(x+w*.3,y-1.5,1,0,6.2832);ctx.fill();
 }
 // 星空 (新 v1.5)
 function drawStars(na){

@@ -97,8 +97,10 @@ const sfx={
 };
 
 // ============ 状态 ============
-let st='menu',rabbit,bamboo,pickups,particles,clouds,stars,fireflies,lanterns;
-let score,lastSpawn,shake,dayPhase,invincible,frame;
+let st='menu';
+let rabbit={x:90,y:H*0.42,v:0,rot:0,shield:false};
+let bamboo=[],pickups=[],particles=[],clouds=[],stars=[],fireflies=[],lanterns=[],seasonParts=[],trail=[];
+let score=0,lastSpawn=0,shake=0,dayPhase=0,invincible=0,frame=0;
 let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0;
 let gameSpeed=1,speedBurst=0;
 // P217: 节气系统 v1.7 — 每40分换季，特效粒子+季节玩法
@@ -108,7 +110,7 @@ const SEASONS=[
   {name:'秋',part:'leaf', pc:'#d88a3a',sky:['#d8b890','#e8d0a8']},
   {name:'冬',part:'snow', pc:'#f0f0f8',sky:['#b8c0cc','#dce0e8']}
 ];
-let season=0,seasonParts=[],blessTimer=0,trail=[];
+let season=0,blessTimer=0;
 const G=0.42,JUMP=-7.6,RR=13;
 const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
@@ -561,7 +563,7 @@ $('retryBtn').addEventListener('click',retry);
 function fit(){const s=Math.min(innerWidth/W,innerHeight/H);cvs.style.width=(W*s)+'px';cvs.style.height=(H*s)+'px';}
 addEventListener('resize',fit);fit();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
-window.__motu={get state(){return st},get score(){return score},get best(){return best},jump(){if(st==='play')jump();else if(st==='menu')startGame();},burst(){activateBurst()}};
+window.__motu={get state(){return st},get score(){return score},get best(){return best},get season(){return season},get skill(){return skillMeter},jump(){if(st==='play'){if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}rabbit.v=JUMP;}else if(st==='menu')startGame();},burst(){activateBurst()},god(){if(st==='play')invincible=9999;},force(delta){if(st!=='play')return;score+=delta;scoreTxt.textContent=score;dayPhase=Math.min(1,(score%50)/40);advanceSeason();if(score%25<delta)applyBlessing();}};
 })();
 </script>
 </body>

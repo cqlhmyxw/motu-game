@@ -45,7 +45,7 @@ canvas{display:block;box-shadow:0 0 40px rgba(0,0,0,.7)}
   <div id="hud" style="display:none">
     <div class="l" id="scoreTxt">0</div>
     <div class="r">
-      <span id="skillLbl">技</span>
+      <span id="skillLbl">技</span><span id="seasonLbl" style="font-size:12px;color:#d4c5a0">春</span>
       <div style="width:70px;height:5px;background:rgba(0,0,0,.4);border-radius:3px;margin-top:2px;overflow:hidden;border:1px solid rgba(200,168,112,.3)">
         <div id="skillBar" style="width:0%;height:100%;background:linear-gradient(90deg,#c8a870,#e8c040);border-radius:2px;transition:width .2s"></div>
       </div>
@@ -101,6 +101,14 @@ let st='menu',rabbit,bamboo,pickups,particles,clouds,stars,fireflies,lanterns;
 let score,lastSpawn,shake,dayPhase,invincible,frame;
 let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0;
 let gameSpeed=1,speedBurst=0;
+// P217: 节气系统 v1.7 — 每40分换季，特效粒子+季节玩法
+const SEASONS=[
+  {name:'春',part:'petal',pc:'#f0a8b8',sky:['#c8d8c0','#e8dfe8']},
+  {name:'夏',part:'rain', pc:'#7898b8',sky:['#a8c8b8','#d8e0c8']},
+  {name:'秋',part:'leaf', pc:'#d88a3a',sky:['#d8b890','#e8d0a8']},
+  {name:'冬',part:'snow', pc:'#f0f0f8',sky:['#b8c0cc','#dce0e8']}
+];
+let season=0,seasonParts=[],blessTimer=0,trail=[];
 const G=0.42,JUMP=-7.6,RR=13;
 const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
@@ -113,6 +121,7 @@ function reset(){
   for(let i=0;i<30;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.55,tw:Math.random()*6.28,s:0.4+Math.random()*1.2});
   for(let i=0;i<8;i++) fireflies.push({x:Math.random()*W,y:60+Math.random()*260,ph:Math.random()*6.28,s:0.3+Math.random()*0.8,r:1.5+Math.random()*2});
   score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;
+  season=0;seasonParts=[];blessTimer=0;trail=[];
   scoreTxt.textContent='0';bestTxt.textContent='最高 '+best;skillBar.style.width='0%';skillLbl.style.color='#c8a870';skillLbl.textContent='技';
   skillBar.style.background='linear-gradient(90deg,#c8a870,#e8c040)';
 }
@@ -121,6 +130,11 @@ function diff(){
   let spd=2.1+d*.048;
   if(speedBurst>0) spd*=1.35;
   spd*=gameSpeed;
+  // P217: 春加速/夏减速/秋不变/冬减速+危险
+  const se=SEASONS[season];
+  if(se.name==='春')spd*=1.1;
+  else if(se.name==='夏')spd*=0.95;
+  else if(se.name==='冬'){spd*=0.92;if(Math.random()<0.04)spd*=1.3;} // 偶尔暴风雪加速
   return {speed:spd,gap:Math.max(130,190-d*1.6),interval:Math.max(110,150-d*1.1)};
 }
 function hasShield(){return rabbit&&rabbit.shield}
@@ -152,6 +166,10 @@ function spawnBamboo(){
   } else {
     bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:D.gap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false});
   }
+  // P217: 夜间天灯节 — 每150分召唤天灯群
+  if(score%40===39&&dayPhase>.55){
+    for(let i=0;i<5;i++)lanterns.push({x:W+20+Math.random()*80,y:H+10+Math.random()*60,ph:Math.random()*6.28});
+  }
   if(st==='play'){
     // P215: 前3根竹子保底出 符纸→灵草→萝卜，让新道具一定被看到
     const forced=['shield','herb','radish'][Math.min(score,2)];
@@ -174,7 +192,9 @@ function update(dt,now){
     if(burstTimer===0){invincible=0;skillLbl.style.color='#c8a870';skillLbl.textContent='技';}
   }
   if(speedBurst>0){speedBurst--;}
-  rabbit.v+=G;rabbit.y+=rabbit.v;
+  if(doubleCoinTimer>0)doubleCoinTimer--;
+  if(lowGravTimer>0)lowGravTimer--;
+  rabbit.v+=(lowGravTimer>0?G*0.5:G);rabbit.y+=rabbit.v;
   rabbit.rot=Math.max(-.5,Math.min(1.1,rabbit.v*.06));
   if(rabbit.y<RR){rabbit.y=RR;rabbit.v=0;}
   if(rabbit.y>H-RR){
@@ -187,7 +207,7 @@ function update(dt,now){
   for(let i=bamboo.length-1;i>=0;i--){
     const b=bamboo[i];b.x-=D.speed;
     if(b.move){const minY=70+b.gap/2,maxY=H-70-b.gap/2;b.gapY+=Math.sin((now||performance.now())*.002+b.ph)*.7;if(b.gapY<minY)b.gapY=minY;if(b.gapY>maxY)b.gapY=maxY;}
-    if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=Math.min(1,(score%50)/40);}
+    if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=Math.min(1,(score%50)/40);if(score%25===0&&blessTimer<=0)applyBlessing();}
     if(rabbit.x+RR>b.x&&rabbit.x-RR<b.x+b.w){
       if(rabbit.y-RR<b.gapY-b.gap/2||rabbit.y+RR>b.gapY+b.gap/2){
         if(!takeHit()){hit();return;}   // P215: 统一护盾/无敌判定
@@ -199,7 +219,10 @@ function update(dt,now){
     const p=pickups[i];p.x-=D.speed;p.ph+=.1;
     const dx=p.x-rabbit.x,dy=p.y-rabbit.y;
     if(dx*dx+dy*dy<(RR+11)*(RR+11)){
-      if(p.kind==='coin'){comboN++;comboTimer=90;const gain=1+Math.floor(comboN/5);score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);}
+      if(p.kind==='coin'){comboN++;comboTimer=90;let gain=1+Math.floor(comboN/5);if(doubleCoinTimer>0)gain*=2;score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);
+        // P217: 15连击 → 墨韵爆发，清屏+额外分
+        if(comboN===15&&bamboo.length>0){let clearN=bamboo.length;bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',6));bamboo=[];score+=clearN*2;scoreTxt.textContent=score;showCombo('✦ 墨 韵 爆 发 ✦ 清'+clearN+'竹');sfx.burst();vib([60,40,100]);shake=14;}
+      }
       else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');showCombo('墨珠 +5');addSkill(8);}
       else if(p.kind==='shield'){rabbit.shield=true;sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身');addSkill(5);}
       else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=90;addSkill(5);}
@@ -214,6 +237,7 @@ function update(dt,now){
   for(let i=fireflies.length-1;i>=0;i--){const f=fireflies[i];f.x+=Math.sin(f.ph+now*.001)*.5;f.y+=Math.cos(f.ph*1.3+now*.0008)*.35;f.ph+=.02;if(f.x<-10)f.x=W+10;if(f.x>W+10)f.x=-10;if(f.y<50)f.y=H-50;if(f.y>H-50)f.y=50;}
   clouds.forEach(c=>{c.x-=c.s;if(c.x<-c.w)c.x=W+c.w;});
   for(let i=lanterns.length-1;i>=0;i--){const l=lanterns[i];l.x-=D.speed*.5;l.ph+=.03;if(l.x<-30)lanterns.splice(i,1);}
+  updateSeasonFx(now);
   if(shake>0)shake--;
 }
 
@@ -241,6 +265,49 @@ function puff(x,y,col,n){for(let i=0;i<n;i++){const a=Math.random()*6.2832,s=1+M
 function floatText(x,y,txt){particles.push({x,y,vx:0,vy:-1.1,life:34,txt,col:'#8b6a1a'});}
 let comboHideT=0;
 function showCombo(txt){comboEl.textContent=txt;comboEl.classList.add('show');clearTimeout(comboHideT);comboHideT=setTimeout(()=>comboEl.classList.remove('show'),900);}
+
+// P217: 道童祝福系统 — 每25分随机一种增益
+const BLESS=[
+  {name:'福缘广进',eff:'双倍金币',dur:480,col:'#e8c040'},
+  {name:'身轻如燕',eff:'重力减半',dur:420,col:'#78c8a8'},
+  {name:'墨海慈航',eff:'立即清屏',dur:0,col:'#4a5568'},
+  {name:'天官赐福',eff:'技能条满',dur:0,col:'#ff9a3a'}
+];
+let doubleCoinTimer=0,lowGravTimer=0;
+function applyBlessing(){
+  const b=BLESS[Math.floor(Math.random()*BLESS.length)];
+  showCombo('☯ '+b.name+'·'+b.eff+' ☯');
+  puff(rabbit.x,rabbit.y,b.col,20);
+  floatText(rabbit.x,rabbit.y-30,b.name);
+  sfx.skill();vib([25,20,60]);
+  blessTimer=200;
+  if(b.eff==='双倍金币')doubleCoinTimer=b.dur;
+  else if(b.eff==='重力减半')lowGravTimer=b.dur;
+  else if(b.eff==='立即清屏'){bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',5));bamboo=[];shake=10;}
+  else if(b.eff==='技能条满'){skillMeter=SKILL_MAX;addSkill(0);}
+}
+
+// P217: 节气推进与墨迹轨迹
+function advanceSeason(){
+  const next=Math.min(3,Math.floor(score/12));
+  if(next!==season){season=next;seasonParts=[];blessTimer=100;showCombo('节气·'+SEASONS[season].name+'临');sfx.skill();puff(rabbit.x,rabbit.y,SEASONS[season].pc,18);const sl=$('seasonLbl');if(sl){sl.textContent=SEASONS[season].name;sl.style.color=SEASONS[season].pc;}}
+}
+function updateSeasonFx(now){
+  advanceSeason();
+  if(blessTimer>0)blessTimer--;
+  trail.push({x:rabbit.x-8,y:rabbit.y+10,life:18,col:SEASONS[season].pc});
+  if(trail.length>18)trail.shift();
+  const count=season===3?2:1;
+  if(frame%6===0)for(let i=0;i<count;i++)seasonParts.push({x:Math.random()*W,y:-8,vy:1.2+Math.random()*1.8,vx:(Math.random()-.5)*.5,life:100,rot:Math.random()*6.28});
+  for(let i=seasonParts.length-1;i>=0;i--){const p=seasonParts[i];p.x+=p.vx;p.y+=p.vy;p.rot+=.03;p.life--;if(p.y>H+12||p.life<=0)seasonParts.splice(i,1);}
+}
+function drawSeasonFx(){
+  const se=SEASONS[season];
+  trail.forEach(t=>{ctx.globalAlpha=t.life/70;ctx.fillStyle=t.col;ctx.beginPath();ctx.arc(t.x,t.y,2.5,0,6.28);ctx.fill();t.life--;});
+  ctx.save();ctx.globalAlpha=.72;ctx.fillStyle=se.pc;
+  seasonParts.forEach(p=>{ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);if(se.part==='rain'){ctx.fillRect(0,0,1,9);}else if(se.part==='snow'){ctx.beginPath();ctx.arc(0,0,2.5,0,6.28);ctx.fill();}else{ctx.beginPath();ctx.ellipse(0,0,4,2,0,0,6.28);ctx.fill();}ctx.restore();});
+  ctx.restore();ctx.globalAlpha=1;
+}
 
 // ============ 绘制 ============
 function draw(){
@@ -284,6 +351,13 @@ function draw(){
   // 云朵
   ctx.fillStyle='rgba(245,240,232,.35)';
   clouds.forEach(c=>{ctx.beginPath();ctx.ellipse(c.x,c.y,c.w*.5,14,0,0,6.2832);ctx.fill();});
+
+  // P217: 节气色调叠加 + 季节粒子 (v1.7)
+  const se=SEASONS[season];
+  const seAlpha=.035+Math.sin(performance.now()*.001)*.008;
+  const tint=season===0?'rgba(255,170,200,':season===1?'rgba(120,190,220,':season===2?'rgba(220,140,60,':'rgba(220,230,255,';
+  ctx.fillStyle=tint+seAlpha+')';
+  ctx.fillRect(-20,-20,W+40,H+40);
 
   // 夜灯 (新 v1.5)
   if(dayPhase>.55){
@@ -369,6 +443,9 @@ function draw(){
       ctx.beginPath();ctx.moveTo(rx,ry);ctx.lineTo(rx-2,ry+8);ctx.stroke();
     }
   }
+
+  // P217: 节气粒子层——花瓣/雨丝/落叶/雪花 (v1.7)
+  drawSeasonFx();
 
   // 粒子
   particles.forEach(q=>{ctx.globalAlpha=Math.min(1,q.life/22);ctx.fillStyle=q.col;if(q.txt){ctx.font='bold 16px KaiTi';ctx.textAlign='center';ctx.fillText(q.txt,q.x,q.y);}else{ctx.beginPath();ctx.arc(q.x,q.y,q.r||3,0,6.2832);ctx.fill();}});

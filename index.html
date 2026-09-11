@@ -436,6 +436,33 @@ const BLESS=[
   {name:'天官赐福',eff:'技能条满',dur:0,col:'#ff9a3a'}
 ];
 let doubleCoinTimer=0,lowGravTimer=0;
+// P233: 朱砂印章特效
+let sealFx=null;
+function drawSeal(){
+  if(!sealFx||!sealFx.active)return;
+  const s=sealFx;
+  // 从大砸到正常（前几帧 scale 8→1，像盖章）
+  if(s.scale>1){s.scale=Math.max(1,s.scale*0.55);s.life-=1;}
+  else{s.life-=0.35;if(s.life<=0){sealFx.active=false;return;}}
+  const k=Math.max(0,Math.min(1,s.life/20));
+  ctx.save();ctx.translate(s.x,s.y);
+  ctx.globalAlpha=Math.min(1,k+.35);
+  const sz=26*s.scale;
+  // 印泥红底（微旋转 = 手盖歪感）
+  ctx.rotate(-0.06);
+  ctx.fillStyle='rgba(154,42,32,.92)';
+  ctx.beginPath();
+  ctx.roundRect?ctx.roundRect(-sz/2,-sz/2,sz,sz,3):ctx.rect(-sz/2,-sz/2,sz,sz);
+  ctx.fill();
+  // 白文印（阴刻效果：白底红字）
+  ctx.fillStyle='rgba(245,238,225,.95)';
+  ctx.font='bold '+Math.floor(sz*.62)+'px KaiTi';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('福',0,1);
+  // 边框留白
+  ctx.strokeStyle='rgba(245,238,225,.5)';ctx.lineWidth=1.5;
+  ctx.strokeRect(-sz/2+3,-sz/2+3,sz-6,sz-6);
+  ctx.restore();
+}
 function applyBlessing(){
   const b=BLESS[Math.floor(Math.random()*BLESS.length)];
   showCombo('☯ '+b.name+'·'+b.eff+' ☯');
@@ -443,6 +470,8 @@ function applyBlessing(){
   floatText(rabbit.x,rabbit.y-30,b.name);
   sfx.skill();vib([25,20,60]);
   blessTimer=200;
+  // P233: 朱砂印章落定 —— 祝福时右上角砸下朱红方印（中式仪式感）
+  sealFx={x:W-70,y:40,scale:8,life:20,active:true};
   if(b.eff==='双倍金币')doubleCoinTimer=b.dur;
   else if(b.eff==='重力减半')lowGravTimer=b.dur;
   else if(b.eff==='立即清屏'){bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',5));bamboo=[];shake=10;}
@@ -859,6 +888,8 @@ function draw(){
 
   // P222: 全屏氛围层（雾+暗角+纸纹）放在最上层
   drawAmbience();
+  // P233: 朱砂印章（最上层，祝福时砸下）
+  drawSeal();
   // P227: 死亡墨花（失败后绽放，仪式感）
   drawDoomBloom();
   ctx.restore();

@@ -912,6 +912,14 @@ function draw(){
     // P223: 兔子重绘 — 大头二头身、灵动大眼、会眨眼、耳朵摇摆、腮红、软投影，可爱+质感
     // 落地软影
     ctx.save();ctx.globalAlpha=.16;ctx.fillStyle='#000';ctx.beginPath();ctx.ellipse(0,RR+6,RR*.95,3.5,0,0,6.2832);ctx.fill();ctx.restore();
+    // P242: 二段跳金光环 —— 快攻/空中补跳时兔子周围金光闪烁
+    if(rabbit.isAirJump||rabbit.justJumped){
+      ctx.save();
+      ctx.globalAlpha=(.35+.5*Math.sin(frame*.15))*Math.min(1,rabbit.isAirJump?1:(frame-rabbit.lastJumpFrame)/8);
+      ctx.strokeStyle='#ffd766';ctx.lineWidth=2.5+Math.sin(frame*.2)*1.5;
+      ctx.beginPath();ctx.arc(0,0,RR+18,0,6.2832);ctx.stroke();
+      ctx.restore();
+    }
     // 耳朵：长而下垂感，随风/速度摇摆，内侧粉晕
     for(const s of[-1,1]){
       ctx.save();ctx.translate(s*4.5,-RR+1);ctx.rotate(lean*s*.5+s*.22+Math.sin(now*.004+s)*.09);
@@ -1194,17 +1202,18 @@ requestAnimationFrame(loop);
 function jump(){
   if(st!=='play')return;
   if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}
-  // P241修复: flappy式——每次点击都响应跳跃（旧jumps计数在落地即死的玩法里永久卡死，导致点跳无反应）
   const airTime=frame-(rabbit.lastJumpFrame||-999);
-  if(airTime<5)return;                 // 极短冷却，防同帧连点误触
+  if(airTime<5)return;
   rabbit.lastJumpFrame=frame;
+  rabbit.justJumped=true;               // P242: 两帧内显影
+  setTimeout(()=>rabbit.justJumped=false,100);
   if(airTime<14){
-    // 空中快速补跳 = 二段跳（稍弱+墨花特效），但不拦截，永远给升力
-    rabbit.v=JUMP*.85;
+    rabbit.v=JUMP*.85;rabbit.isAirJump=true;
+    setTimeout(()=>rabbit.isAirJump=false,120);
     puff(rabbit.x-8,rabbit.y+8,'#8a7f70',5);
     ripple(rabbit.x,rabbit.y+6,'rgba(150,140,125,.45)');
   } else {
-    rabbit.v=JUMP;                     // 正常节奏满跳
+    rabbit.v=JUMP;rabbit.isPerfectJump=false;
   }
   sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);
 }

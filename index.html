@@ -282,7 +282,17 @@ function update(dt,now){
   for(let i=bamboo.length-1;i>=0;i--){
     const b=bamboo[i];b.x-=D.speed*dt;
     if(b.move){const minY=70+b.gap/2,maxY=H-70-b.gap/2;b.gapY+=Math.sin((now||performance.now())*.002+b.ph)*.7*dt;if(b.gapY<minY)b.gapY=minY;if(b.gapY>maxY)b.gapY=maxY;}
-    if(!b.passed&&b.x+b.w<rabbit.x-RR){b.passed=true;score++;scoreTxt.textContent=score;sfx.pass();dayPhase=Math.min(1,(score%50)/40);if(score%25===0&&blessTimer<=0)applyBlessing();}
+    if(b.shake>0)b.shake=Math.max(0,b.shake-dt);   // P237: 砍竹抖动衰减
+    if(!b.passed&&b.x+b.w<rabbit.x-RR){
+      b.passed=true;
+      score++;
+      scoreTxt.textContent=score;
+      sfx.pass();
+      dayPhase=Math.min(1,(score%50)/40);
+      if(score%25===0&&blessTimer<=0)applyBlessing();
+      // P237: 落地小特效 —— 每次通过砍竹，落地扇几个墨点
+      for(let k=0;k<3;k++)puff(rabbit.x+(k-1)*8,b.gapY+b.gap/2,'rgba(120,100,70,'+(.3+.2*Math.random())+')',3+k);
+    }
     if(rabbit.x+RR>b.x&&rabbit.x-RR<b.x+b.w){
       if(rabbit.y-RR<b.gapY-b.gap/2||rabbit.y+RR>b.gapY+b.gap/2){
         if(!takeHit()){hit();return;}   // P215: 统一护盾/无敌判定
@@ -304,6 +314,10 @@ function update(dt,now){
     const dx=p.x-rabbit.x,dy=p.y-rabbit.y;
     if(dx*dx+dy*dy<(RR+11)*(RR+11)){
       if(p.kind==='coin'){comboN++;comboTimer=90;let gain=1+Math.floor(comboN/5);if(doubleCoinTimer>0)gain*=2;score+=gain;scoreTxt.textContent=score;sfx.coin();vib(15);puff(p.x,p.y,'#e8c040',8);floatText(p.x,p.y-14,'+'+gain);__eyeBoost=60;if(comboN>=5)showCombo('连击 ×'+comboN+'  +'+gain);addSkill(3);
+        // P237: 连击里程碑 —— 5/10/20 各触发专属特效
+        if(comboN===5){shockwaves.push({x:rabbit.x,y:rabbit.y,r:RR,life:1,col:'#e8c040'});}
+        if(comboN===10){for(let i=0;i<8;i++)puff(rabbit.x,rabbit.y,'#ffd766',2);shake=6;showCombo('✦ 十连 ✦');}
+        if(comboN===20){spawnCoinRain(rabbit.x,rabbit.y);shake=10;showCombo('✦✦ 廿连金雨 ✦✦');sfx.burst();}
         // P217: 15连击 → 墨韵爆发，清屏+额外分
         if(comboN===15&&bamboo.length>0){let clearN=bamboo.length;bamboo.forEach(bb=>puff(bb.x,bb.gapY,'#4a5568',6));bamboo=[];score+=clearN*2;scoreTxt.textContent=score;showCombo('✦ 墨 韵 爆 发 ✦ 清'+clearN+'竹');sfx.burst();vib([60,40,100]);shake=14;/* P228: 15连击金币雨 */spawnCoinRain(rabbit.x,rabbit.y);}
       }
@@ -311,6 +325,7 @@ function update(dt,now){
       else if(p.kind==='shield'){rabbit.shield=Math.min(3,rabbit.shield+1);sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身·'+rabbit.shield+'层');addSkill(5);}
       else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=90;addSkill(5);}
       else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=Math.max(rabbit.shield,1);invincible=120;}
+      if(p.ref)p.ref.shake=9;   // P237: 砍竹抖动
       pickups.splice(i,1);continue;
     }
     if(p.x<-20)pickups.splice(i,1);
@@ -720,14 +735,16 @@ function draw(){
 
   // 竹子 (P218: 质感升级 — 渐变竹段+节环+高光+暗边立体竹竿)
   bamboo.forEach(b=>{
+    // P237: 砍竹抖动 —— 吃道具时关联竹子左右颤动
+    const sx=b.shake>0?Math.sin(b.shake*1.6)*b.shake*.55:0;
     const topH=b.gapY-b.gap/2,botY=b.gapY+b.gap/2;
     // 上段
-    drawBambooStalk(b.x,0,b.w,topH);
+    drawBambooStalk(b.x+sx,0,b.w,topH);
     // 下段
-    drawBambooStalk(b.x,botY,b.w,H-botY);
+    drawBambooStalk(b.x+sx,botY,b.w,H-botY);
     // P219: 竹腔断口（间隙上下切口，空心竹质感）
-    drawBambooCap(b.x,b.w,topH);
-    drawBambooCap(b.x,b.w,botY);
+    drawBambooCap(b.x+sx,b.w,topH);
+    drawBambooCap(b.x+sx,b.w,botY);
     // 双间隙标识 (新 v1.5)
     if(b.twin){
       ctx.strokeStyle='rgba(255,120,60,.4)';ctx.lineWidth=2;ctx.setLineDash([4,4]);

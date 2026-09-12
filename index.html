@@ -137,7 +137,7 @@ let st='menu';
 let rabbit={x:90,y:H*0.42,v:0,rot:0,shield:0};
 let bamboo=[],pickups=[],particles=[],clouds=[],stars=[],fireflies=[],lanterns=[],seasonParts=[],trail=[],shockwaves=[];
 let score=0,lastSpawn=0,shake=0,dayPhase=0,invincible=0,frame=0;
-let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0;
+let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0,perfectStreak=0; // P238③: 连续完美跳跃计数
 let gameSpeed=1,speedBurst=0;
 let __eyeBoost=0; // P229: 兔子瞳孔放大系数（吃币/珍珠瞬间触发）
 let dangerLevel=0; // P238: 危险红晕累积度（0-1）
@@ -160,7 +160,7 @@ function reset(){
   for(let i=0;i<4;i++) clouds.push({x:Math.random()*W,y:40+Math.random()*160,s:.15+Math.random()*.2,w:60+Math.random()*80});
   for(let i=0;i<30;i++) stars.push({x:Math.random()*W,y:Math.random()*H*0.55,tw:Math.random()*6.28,s:0.4+Math.random()*1.2});
   for(let i=0;i<8;i++) fireflies.push({x:Math.random()*W,y:60+Math.random()*260,ph:Math.random()*6.28,s:0.3+Math.random()*0.8,r:1.5+Math.random()*2});
-  score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;__craneAt=0;
+  score=0;lastSpawn=0;shake=0;dayPhase=0;invincible=0;frame=0;comboN=0;comboTimer=0;perfectStreak=0;skillMeter=0;burstTimer=0;gameSpeed=1;speedBurst=0;__craneAt=0;dangerLevel=0;
   season=0;seasonParts=[];blessTimer=0;trail=[];
   menuBamboo=[];menuSparkles=[];__menuTick=0;inkTrail=[];magLines=[];   // P225: 清理菜单装饰+墨迹+磁铁线
   deathInkPoints=[];ghostTrail=[];ripples=[];doomBloom=null;coinRain=null;crane=null;   // P235: 清理死亡墨画+残影+涟漪
@@ -294,12 +294,15 @@ function update(dt,now){
       // P238: 完美跳跃 —— 穿过时兔子越贴近缝隙中心，判定完美，奖励分+金光
       const off=Math.abs(rabbit.y-b.gapY);
       if(off<b.gap*0.16){
-        score+=3;scoreTxt.textContent=score;
-        floatText(rabbit.x,rabbit.y-24,'完美 +3');
+        perfectStreak++;   // P238③: 连续完美叠加
+        const bonus=3+Math.min(7,perfectStreak-1);   // 连得越多奖励越高，封顶+10
+        score+=bonus;scoreTxt.textContent=score;
+        floatText(rabbit.x,rabbit.y-24,'完美 ×'+perfectStreak+' +'+bonus);
         shockwaves.push({x:rabbit.x,y:rabbit.y,r:RR,life:1,col:'#ffd766'});
         for(let i=0;i<6;i++)puff(rabbit.x,rabbit.y,'#ffe89a',1);
         addSkill(6);
-      }
+        if(perfectStreak>=5){showCombo('✦ 完美 ×'+perfectStreak+' 神 行 ✦');vib([20,20,20]);}
+      } else { perfectStreak=0; }
       // P237: 落地小特效 —— 每次通过砍竹，落地扇几个墨点
       for(let k=0;k<3;k++)puff(rabbit.x+(k-1)*8,b.gapY+b.gap/2,'rgba(120,100,70,'+(.3+.2*Math.random())+')',3+k);
     }

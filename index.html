@@ -198,38 +198,47 @@ function takeHit(){
 // ============ 生成 ============
 function spawnBamboo(){
   const D=diff();
-  // P220: gapY 边界校准 — 保证上下各保留 70px 空隙给玩家安全区域
-  // P227:  gapY 围绕兔子初始位置分布（约 H*0.38 ~ H*0.58），绝不让首根竹卡在兔子上方
   const gapY=Math.max(60, Math.min(H-100, H*0.38+Math.random()*(H*0.22-D.gap)));
-  const isDouble=score>=25&&Math.random()<Math.min(.2,(score-25)*0.005);
+  // 最小缝宽保障——确保纯技术可过
+  const minGap=110;
+  const isDouble=score>=25 && Math.random()<Math.min(.18,(score-25)*0.006);
   if(isDouble){
-    const subGap=60+Math.random()*70;
-    const subY=Math.max(100, Math.min(H-120, gapY+gapY/2+(Math.random()-.5)*80));
-    bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
-    bamboo.push({x:W+40+70,w:52,gapY:subY+subGap/2+subGap,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
+    const subGap=Math.max(minGap, 88+Math.random()*70);
+    const subY=Math.max(120, Math.min(H-120, gapY+Math.random()*40));
+    bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
+    bamboo.push({x:W+40+90,w:52,gapY:subY+subGap/2+subGap,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
   } else {
-    // P239: 针眼竹 —— 30分后偶发超窄金缝，穿过+10分
-    const isNeedle=score>=30&&Math.random()<.12;
-    const ngap=isNeedle?Math.max(96,D.gap*.62):D.gap;
-    bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:ngap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false,needle:isNeedle});
+    const isNeedle=score>=30 && Math.random()<.10;
+    const ngap=Math.max(minGap, isNeedle? D.gap*.72 : D.gap);
+    bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:ngap,passed:false,move:false,ph:Math.random()*6.28,twin:false,needle:isNeedle});
   }
-  // P217: 夜间天灯节
-  if(score%40===39&&dayPhase>.55){
+  if(score%40===39 && dayPhase>.55){
     for(let i=0;i<5;i++)lanterns.push({x:W+20+Math.random()*80,y:H+10+Math.random()*60,ph:Math.random()*6.28});
   }
   if(st==='play'){
-    // P220: 道具绑定竹竿 — 跟随该竿间隙中心移动，永远不会嵌进墙里
     const stalk=bamboo[bamboo.length-1];
-    const half=Math.max(12,stalk.gap/2-16);
-    const put=(off,kind)=>pickups.push({x:stalk.x+stalk.w/2,y:stalk.gapY+Math.max(-half,Math.min(half,off)),off:Math.max(-half,Math.min(half,off)),ref:stalk,kind,ph:Math.random()*6});
+    const half=Math.max(14, stalk.gap/2-20);
+    const safeY= y=>Math.max(-half, Math.min(half,y));
     const forced=['shield','herb','radish'][Math.min(score,2)];
-    if(score<3&&forced)put(0,forced);
-    const r=Math.random();
-    if(score>=3&&r<.40){put(-34,'coin');put(0,'coin');put(34,'coin');}
-    else if(r<.54)put(-40,'pearl');
-    else if(r<.68)put(0,'shield');
-    else if(r<.82)put(-28,'radish');
-    else put(18,'herb');
+    if(score<3 && forced){
+      pickups.push({x:stalk.x+stalk.w/2, y:stalk.gapY, off:0, ref:stalk, kind:forced, ph:Math.random()*6});
+    } else if(score>=3 && stalk.gap>=minGap && !stalk.twin){
+      const r=Math.random();
+      if(r<.35){
+        // 经典三连铜钱：同一高度，横向排成一串，避免叠一起
+        const baseY=stalk.gapY;
+        const baseX=stalk.x+stalk.w/2;
+        pickups.push({x:baseX-28, y:baseY, off:0, ref:stalk, kind:'coin', ph:Math.random()*6});
+        pickups.push({x:baseX,     y:baseY, off:0, ref:stalk, kind:'coin', ph:Math.random()*6});
+        pickups.push({x:baseX+28, y:baseY, off:0, ref:stalk, kind:'coin', ph:Math.random()*6});
+      } else if(r<.55){
+        pickups.push({x:stalk.x+stalk.w/2, y:stalk.gapY+safeY(-30), off:0, ref:stalk, kind:'pearl', ph:Math.random()*6});
+      } else if(r<.75){
+        pickups.push({x:stalk.x+stalk.w/2, y:stalk.gapY, off:0, ref:stalk, kind:'shield', ph:Math.random()*6});
+      } else {
+        pickups.push({x:stalk.x+stalk.w/2, y:stalk.gapY+safeY(-22), off:0, ref:stalk, kind:'radish', ph:Math.random()*6});
+      }
+    }
   }
 }
 

@@ -198,19 +198,22 @@ function takeHit(){
 // ============ 生成 ============
 function spawnBamboo(){
   const D=diff();
-  // P220: gapY 边界校准 — 保证上下各保留 70px 空隙给玩家安全区域
-  // P227:  gapY 围绕兔子初始位置分布（约 H*0.38 ~ H*0.58），绝不让首根竹卡在兔子上方
   const gapY=Math.max(60, Math.min(H-100, H*0.38+Math.random()*(H*0.22-D.gap)));
-  const isDouble=score>=25&&Math.random()<Math.min(.2,(score-25)*0.005);
-  if(isDouble){
-    const subGap=60+Math.random()*70;
-    const subY=Math.max(100, Math.min(H-120, gapY+gapY/2+(Math.random()-.5)*80));
-    bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
-    bamboo.push({x:W+40+70,w:52,gapY:subY+subGap/2+subGap,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
+  // P244: 技巧墙 — 每5根必有一段纯技巧挑战：单缝+窄到需精密跳，但绝对可过（无道具）
+  // 关键物理约束：单缝永远是同一水平直线，最大跳高75px>兔子高26px，纯技术必能过
+  const techWall=score>0 && score%5===0;
+  if(techWall){
+    const ngap=Math.max(110, D.gap*.72);   // 足够窄到要技术，但宽于兔子高(26px)→可过
+    bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:ngap,passed:false,move:false,ph:Math.random()*6.28,twin:false,needle:false,tech:true});
+  } else if(score>=25&&Math.random()<Math.min(.2,(score-25)*0.005)){
+    // 双连墙：低频出现(<20%)，且缝宽加大到足够轻点连跳
+    const subGap=80+Math.random()*60;      // 双缝放宽，保证能靠连跳通过
+    const subY=Math.max(100, Math.min(H-120, gapY+gapY/2+(Math.random()-.5)*60));
+    bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
+    bamboo.push({x:W+40+80,w:52,gapY:subY+subGap/2,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
   } else {
-    // P239: 针眼竹 —— 30分后偶发超窄金缝，穿过+10分
     const isNeedle=score>=30&&Math.random()<.12;
-    const ngap=isNeedle?Math.max(96,D.gap*.62):D.gap;
+    const ngap=isNeedle?Math.max(100,D.gap*.70):D.gap;
     bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:ngap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false,needle:isNeedle});
   }
   // P217: 夜间天灯节
@@ -218,18 +221,24 @@ function spawnBamboo(){
     for(let i=0;i<5;i++)lanterns.push({x:W+20+Math.random()*80,y:H+10+Math.random()*60,ph:Math.random()*6.28});
   }
   if(st==='play'){
-    // P220: 道具绑定竹竿 — 跟随该竿间隙中心移动，永远不会嵌进墙里
-    const stalk=bamboo[bamboo.length-1];
-    const half=Math.max(12,stalk.gap/2-16);
-    const put=(off,kind)=>pickups.push({x:stalk.x+stalk.w/2,y:stalk.gapY+Math.max(-half,Math.min(half,off)),off:Math.max(-half,Math.min(half,off)),ref:stalk,kind,ph:Math.random()*6});
-    const forced=['shield','herb','radish'][Math.min(score,2)];
-    if(score<3&&forced)put(0,forced);
-    const r=Math.random();
-    if(score>=3&&r<.40){put(-34,'coin');put(0,'coin');put(34,'coin');}
-    else if(r<.54)put(-40,'pearl');
-    else if(r<.68)put(0,'shield');
-    else if(r<.82)put(-28,'radish');
-    else put(18,'herb');
+    // P243: 道具稀疏化 — 取决于难度，最大每3根竹1次道具，且道具不绑在必经线上
+    if(score>=3 && (score%3===0 || Math.random()<0.25)){
+      const stalk=bamboo[bamboo.length-1];
+      const spacing = Math.max(20, stalk.gap/2-12);
+      const put=(off,kind)=>pickups.push({x:stalk.x+stalk.w/2,y:stalk.gapY+off,off:off,ref:stalk,kind,ph:Math.random()*6});
+      // 难度曲线：低分送必备护盾/药草，高分仅金币/珍珠，杜绝必靠道具
+      let pool=[];
+      if(score<12) pool=['shield','herb'];
+      else if(score<30) pool=['coin','pearl'];
+      else pool=['coin'];
+      const kind=pool[Math.floor(Math.random()*pool.length)];
+      const off=Math.random()<0.5?spacing:-spacing;
+      put(off,kind);
+      // P243: 偶发"道具缺口"——每5根必有一个无道具的绝对技巧墙
+      if(score>0 && score%5===0){
+        bamboo[bamboo.length-1].noItem=true;
+      }
+    }
   }
 }
 
@@ -808,6 +817,14 @@ function draw(){
       ctx.beginPath();ctx.moveTo(b.x,b.gapY-b.gap/2);ctx.lineTo(b.x+b.w,b.gapY-b.gap/2);ctx.stroke();
       ctx.beginPath();ctx.moveTo(b.x,b.gapY+b.gap/2);ctx.lineTo(b.x+b.w,b.gapY+b.gap/2);ctx.stroke();
       ctx.setLineDash([]);
+    }
+    // P244: 技巧墙红边 —— 明确提示"这是纯技术关，无道具也能过"
+    if(b.tech){
+      ctx.save();ctx.globalAlpha=.6+.3*Math.sin(frame*.12);
+      ctx.strokeStyle='#e2574a';ctx.lineWidth=2.5;ctx.shadowColor='#ff6a5e';ctx.shadowBlur=8;
+      ctx.beginPath();ctx.moveTo(b.x+sx,topH);ctx.lineTo(b.x+sx+b.w,topH);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x+sx,botY);ctx.lineTo(b.x+sx+b.w,botY);ctx.stroke();
+      ctx.restore();
     }
     // P229: move 竹子飘叶效果 —— 落叶随风轻扬
     if(b.move){

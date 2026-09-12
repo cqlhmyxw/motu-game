@@ -140,6 +140,7 @@ let score=0,lastSpawn=0,shake=0,dayPhase=0,invincible=0,frame=0;
 let comboN=0,comboTimer=0,skillMeter=0,burstTimer=0;
 let gameSpeed=1,speedBurst=0;
 let __eyeBoost=0; // P229: 兔子瞳孔放大系数（吃币/珍珠瞬间触发）
+let dangerLevel=0; // P238: 危险红晕累积度（0-1）
 // P217: 节气系统 v1.7 — 每40分换季，特效粒子+季节玩法
 const SEASONS=[
   {name:'春',part:'petal',pc:'#f0a8b8',sky:['#c8d8c0','#e8dfe8']},
@@ -290,6 +291,15 @@ function update(dt,now){
       sfx.pass();
       dayPhase=Math.min(1,(score%50)/40);
       if(score%25===0&&blessTimer<=0)applyBlessing();
+      // P238: 完美跳跃 —— 穿过时兔子越贴近缝隙中心，判定完美，奖励分+金光
+      const off=Math.abs(rabbit.y-b.gapY);
+      if(off<b.gap*0.16){
+        score+=3;scoreTxt.textContent=score;
+        floatText(rabbit.x,rabbit.y-24,'完美 +3');
+        shockwaves.push({x:rabbit.x,y:rabbit.y,r:RR,life:1,col:'#ffd766'});
+        for(let i=0;i<6;i++)puff(rabbit.x,rabbit.y,'#ffe89a',1);
+        addSkill(6);
+      }
       // P237: 落地小特效 —— 每次通过砍竹，落地扇几个墨点
       for(let k=0;k<3;k++)puff(rabbit.x+(k-1)*8,b.gapY+b.gap/2,'rgba(120,100,70,'+(.3+.2*Math.random())+')',3+k);
     }
@@ -298,6 +308,9 @@ function update(dt,now){
         if(!takeHit()){hit();return;}   // P215: 统一护盾/无敌判定
       }
     }
+    // P238: 危险红晕 —— 前方竹子逼近且缝隙偏离兔子时，累积危险度
+    const gapDist=Math.abs(rabbit.y-b.gapY);
+    if(b.x>rabbit.x&&b.x<rabbit.x+90&&gapDist>b.gap*0.5){dangerLevel=Math.min(1,dangerLevel+0.04*dt);}
     if(b.x+b.w<-30)bamboo.splice(i,1);
   }
   for(let i=pickups.length-1;i>=0;i--){
@@ -345,6 +358,7 @@ function update(dt,now){
   if(comboTimer>0){comboTimer-=dt;if(comboTimer<=0)comboN=0;}
   if(invincible>0&&burstTimer<=0){invincible-=dt;if(invincible<0)invincible=0;}
   if(__eyeBoost>0){__eyeBoost-=dt;if(__eyeBoost<0)__eyeBoost=0;}
+  if(dangerLevel>0){dangerLevel-=0.02*dt;if(dangerLevel<0)dangerLevel=0;}   // P238: 危险度衰减
   for(let i=magLines.length-1;i>=0;i--){const m=magLines[i];m.life-=dt;if(m.life<=0)magLines.splice(i,1);}
   for(let i=particles.length-1;i>=0;i--){const q=particles[i];q.x+=q.vx*dt;q.y+=q.vy*dt;if(!q.txt)q.vy+=.12*dt;q.life-=dt;if(q.life<=0)particles.splice(i,1);}
   // P222: 冲击波推进
@@ -948,6 +962,13 @@ function draw(){
   drawAmbience();
   // P233: 朱砂印章（最上层，祝福时砸下）
   drawSeal();
+  // P238: 危险红晕 —— 快撞竹时屏幕边缘泛红脉动
+  if(dangerLevel>0.05&&st==='play'){
+    const pulse=dangerLevel*(.6+.4*Math.sin(frame*.3));
+    const rg=ctx.createRadialGradient(W/2,H/2,H*.3,W/2,H/2,H*.72);
+    rg.addColorStop(0,'rgba(200,30,20,0)');rg.addColorStop(1,'rgba(200,30,20,'+(pulse*.4)+')');
+    ctx.fillStyle=rg;ctx.fillRect(-20,-20,W+40,H+40);
+  }
   // P227: 死亡墨花（失败后绽放，仪式感）
   drawDoomBloom();
   ctx.restore();

@@ -1194,17 +1194,17 @@ requestAnimationFrame(loop);
 function jump(){
   if(st!=='play')return;
   if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}
-  // P231: 双跳 —— 地面跳不受限，空中只允许1段二段跳（弱跳，80%力度）
-  if(rabbit.y<H-RR-2){
-    if(rabbit.jumps>=1)return;
-    rabbit.jumps++;
-    rabbit.v=JUMP*.8;
-    // 二段跳特效：脚下墨花+涟漪
+  // P241修复: flappy式——每次点击都响应跳跃（旧jumps计数在落地即死的玩法里永久卡死，导致点跳无反应）
+  const airTime=frame-(rabbit.lastJumpFrame||-999);
+  if(airTime<5)return;                 // 极短冷却，防同帧连点误触
+  rabbit.lastJumpFrame=frame;
+  if(airTime<14){
+    // 空中快速补跳 = 二段跳（稍弱+墨花特效），但不拦截，永远给升力
+    rabbit.v=JUMP*.85;
     puff(rabbit.x-8,rabbit.y+8,'#8a7f70',5);
     ripple(rabbit.x,rabbit.y+6,'rgba(150,140,125,.45)');
   } else {
-    rabbit.jumps=0;
-    rabbit.v=JUMP;
+    rabbit.v=JUMP;                     // 正常节奏满跳
   }
   sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);
 }

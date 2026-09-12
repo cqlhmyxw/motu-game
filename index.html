@@ -170,14 +170,13 @@ function reset(){
 }
 function diff(){
   const d=Math.min(score,80);
-  let spd=3.4+d*.085;   // P223: 提回流畅速度（旧2.1+0.048太肉）
-  if(speedBurst>0) spd*=1.35;
+  let spd=2.3+d*.065;   // P249: 再降速(2.7→2.3)——"速度太快"反馈，纯技术精准穿缝
+  if(speedBurst>0) spd*=1.2;
   spd*=gameSpeed;
-  // P223: 季节系数不再拖速度——春加速、其余中性、冬微快(结冰打滑感)
   const se=SEASONS[season];
-  if(se.name==='春')spd*=1.08;
-  else if(se.name==='冬')spd*=1.05;
-  return {speed:spd,gap:Math.max(145,195-d*1.15),interval:Math.max(120,158-d*.9)};
+  if(se.name==='春')spd*=1.05;
+  else if(se.name==='冬')spd*=1.03;
+  return {speed:spd,gap:Math.max(150,205-d*1.2),interval:Math.max(135,170-d*.9)};
 }
 function hasShield(){return rabbit&&rabbit.shield>0}
 
@@ -204,13 +203,18 @@ function spawnBamboo(){
   const isDouble=score>=25 && Math.random()<Math.min(.18,(score-25)*0.006);
   if(isDouble){
     const subGap=Math.max(minGap, 88+Math.random()*70);
-    const subY=Math.max(120, Math.min(H-120, gapY+Math.random()*40));
-    bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
-    bamboo.push({x:W+40+90,w:52,gapY:subY+subGap/2+subGap,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
+    // P249: 双连墙两根缝都必须完整在屏内——缝中心钳到 [gap/2+16, H-gap/2-16]，杜绝"缝掉出屏幕=堵死"
+    const lo=subGap/2+16, hi=H-subGap/2-16;
+    const y1=Math.max(lo, Math.min(hi, gapY));
+    const y2=Math.max(lo, Math.min(hi, y1+subGap+90+Math.random()*60));
+    bamboo.push({x:W+40,w:52,gapY:y1,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
+    bamboo.push({x:W+40+90,w:52,gapY:y2,gap:subGap,passed:false,move:false,ph:Math.random()*6.28,twin:true});
   } else {
     const isNeedle=score>=30 && Math.random()<.10;
     const ngap=Math.max(minGap, isNeedle? D.gap*.72 : D.gap);
-    bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:ngap,passed:false,move:false,ph:Math.random()*6.28,twin:false,needle:isNeedle});
+    // P249: 单根同样钳缝在屏内
+    const lo=ngap/2+16, hi=H-ngap/2-16;
+    bamboo.push({x:W+40,w:52,gapY:Math.max(lo,Math.min(hi,gapY+D.gap/2)),gap:ngap,passed:false,move:false,ph:Math.random()*6.28,twin:false,needle:isNeedle});
   }
   if(score%40===39 && dayPhase>.55){
     for(let i=0;i<5;i++)lanterns.push({x:W+20+Math.random()*80,y:H+10+Math.random()*60,ph:Math.random()*6.28});

@@ -901,6 +901,8 @@ function draw(){
 
   // P235: 死亡墨画（失败时水墨散点缓缓晕开，成为一幅小水墨画）
   drawDeathInk();
+  // P236: 纪录星光（新纪录撒金箔）
+  drawNewBestStars();
 
   // P228: 落地荡漾 & 云中鹤飞掠
   drawRipples();
@@ -1184,11 +1186,49 @@ if(!localStorage.getItem(SAVE_KEY+'_g')){setTimeout(()=>{guideScreen.style.displ
 function showOver(){
   hud.style.display='none';
   const isBest=score>best&&score>0;
-  if(isBest){best=score;saveBest(best);$('startBest').textContent='最高分 '+best;}
+  if(isBest){
+    best=score;saveBest(best);$('startBest').textContent='最高分 '+best;
+    newBestScore=score;newBestFrame=0; // P236: 纪录星光
+  }
   const skillPct=Math.round((skillMeter/SKILL_MAX)*100);
   $('overStats').innerHTML=(isBest?'<span class="new-best" style="color:#e8c040;letter-spacing:4px">✦ 新 纪 录 ✦</span><br>':'')+
     '本次 <b style="color:#e8c040">'+score+'</b> 分<br>最高 '+best+'<br>技能蓄积 '+skillPct+'%';
   overScreen.style.display='flex';
+}
+// P236: 纪录星光 —— 死亡后若是新最高分，屏幕撒金箔/星光缓缓飘落
+let newBestScore=0,newBestFrame=0,newBestStars=[];
+function drawNewBestStars(){
+  if(!newBestScore)return;
+  if(newBestFrame===0){ // 初始化星星
+    for(let i=0;i<30;i++){
+      const ang=Math.random()*6.2832,r=30+Math.random()*80;
+      newBestStars.push({
+        x:W/2+Math.cos(ang)*r,y:H/2+Math.sin(ang)*r,
+        vx:Math.random()*2-1,vy:Math.random()*.5-0.3,
+        life:180+Math.random()*120,scale:.5+Math.random()*.5,rot:Math.random()*6.2832});
+    }
+  }
+  newBestFrame++;
+  const prog=Math.min(1,newBestFrame/300);
+  for(let i=newBestStars.length-1;i>=0;i--){
+    const s=newBestStars[i];
+    s.x+=s.vx;s.y+=s.vy+(s.vy*.3);
+    s.rot+=.08;s.life--;
+    const a=Math.max(0,prog-.7)*.6+.4;
+    ctx.save();
+    ctx.translate(s.x,s.y);
+    ctx.rotate(s.rot);
+    ctx.globalAlpha=a*Math.min(1,s.life/180);
+    ctx.fillStyle='#f5c040';
+    ctx.beginPath();ctx.arc(0,0,2*s.scale,0,6.2832);ctx.fill();
+    // 金箔边框
+    ctx.strokeStyle='rgba(245,220,140,'+(1-s.life/180)+')';
+    ctx.lineWidth=1;s.scale>1.2&&ctx.stroke();
+    ctx.restore();
+    if(s.life<=0){
+      newBestStars.splice(i,1);newBestScore=0;
+    }
+  }
 }
 function retry(){overScreen.style.display='none';startGame();}
 $('startBtn').addEventListener('click',startGame);

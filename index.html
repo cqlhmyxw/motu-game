@@ -149,6 +149,7 @@ const SEASONS=[
   {name:'冬',part:'snow', pc:'#f0f0f8',sky:['#b8c0cc','#dce0e8']}
 ];
 let season=0,blessTimer=0;
+let seasonSplash=null; // P240: 季节转场水墨横扫
 const G=0.47,JUMP=-8.4,RR=13; // P223: 提速同步上调重力/跳力，保持跳跃手感一致
 const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
@@ -465,6 +466,25 @@ function drawDoomBloom(){
 }
 // P235: 死亡墨画 —— 失败时分数化作水墨散点缓缓晕开
 let deathInkPoints=[];
+// P240: 季节水墨横扫 —— 换季时一道季节色墨浪从兔子处横扫
+let seasonSplashOn=false;
+function drawSeasonSplash(){
+  if(!seasonSplash||!seasonSplash.active)return;
+  const s=seasonSplash;
+  s.life-=2;
+  const prog=Math.min(1,(90-s.life)/90);
+  s.w=Math.min(W*1.3,20+prog*W);
+  const cx=s.x+s.w*.55, cy=s.y+s.w*.32;
+  const alpha=(1-prog*.4)*.28*Math.min(1,s.life/40);
+  ctx.save();
+  ctx.globalAlpha=Math.max(0,alpha);
+  ctx.fillStyle=s.col;
+  ctx.beginPath();
+  ctx.ellipse(cx,cy,s.w*.7,s.w*.3,.4,0,6.2832);
+  ctx.fill();
+  ctx.restore();
+  if(s.life<=0)seasonSplash.active=false;
+}
 function drawDeathInk(){
   if(st!=='dead'||!deathInkPoints.length)return;
   for(let i=deathInkPoints.length-1;i>=0;i--){
@@ -554,7 +574,14 @@ function applyBlessing(){
 // P217: 节气推进与墨迹轨迹
 function advanceSeason(){
   const next=Math.min(3,Math.floor(score/12));
-  if(next!==season){season=next;seasonParts=[];blessTimer=100;showCombo('节气·'+SEASONS[season].name+'临');sfx.skill();puff(rabbit.x,rabbit.y,SEASONS[season].pc,18);const sl=$('seasonLbl');if(sl){sl.textContent=SEASONS[season].name;sl.style.color=SEASONS[season].pc;}}
+  if(next!==season){
+    season=next;seasonParts=[];blessTimer=100;
+    showCombo('节气·'+SEASONS[season].name+'临');
+    sfx.skill();puff(rabbit.x,rabbit.y,SEASONS[season].pc,18);
+    const sl=$('seasonLbl');if(sl){sl.textContent=SEASONS[season].name;sl.style.color=SEASONS[season].pc;}
+    // P240: 季节水墨横扫 —— 换季时一道季节色墨浪从兔子处横扫至屏幕右下
+    seasonSplash={x:rabbit.x,y:rabbit.y,life:90,w:0,active:true,col:SEASONS[season].pc};
+  }
 }
 let menuBamboo=[],menuSparkles=[],__menuTick=0;
 function spawnMenuBamboo(){
@@ -983,6 +1010,8 @@ function draw(){
   // P222: 冲击波环（爆气/祝福爆发视觉）
   shockwaves.forEach(w=>{ctx.save();ctx.globalAlpha=Math.max(0,w.life)*.7;ctx.strokeStyle=w.col;ctx.lineWidth=3+4*w.life;ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,6.2832);ctx.stroke();ctx.restore();});
 
+  // P240: 季节水墨横扫（换季时，在氛围层之下）
+  drawSeasonSplash();
   // P222: 全屏氛围层（雾+暗角+纸纹）放在最上层
   drawAmbience();
   // P233: 朱砂印章（最上层，祝福时砸下）

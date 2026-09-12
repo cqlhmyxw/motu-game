@@ -207,7 +207,10 @@ function spawnBamboo(){
     bamboo.push({x:W+40,w:52,gapY:subY-subGap/2,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
     bamboo.push({x:W+40+70,w:52,gapY:subY+subGap/2+subGap,gap:subGap,passed:false,move:score>=30&&Math.random()<.4,ph:Math.random()*6.28,twin:true});
   } else {
-    bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:D.gap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false});
+    // P239: 针眼竹 —— 30分后偶发超窄金缝，穿过+10分
+    const isNeedle=score>=30&&Math.random()<.12;
+    const ngap=isNeedle?Math.max(96,D.gap*.62):D.gap;
+    bamboo.push({x:W+40,w:52,gapY:gapY+D.gap/2,gap:ngap,passed:false,move:score>=30&&Math.random()<.5,ph:Math.random()*6.28,twin:false,needle:isNeedle});
   }
   // P217: 夜间天灯节
   if(score%40===39&&dayPhase>.55){
@@ -291,6 +294,8 @@ function update(dt,now){
       sfx.pass();
       dayPhase=Math.min(1,(score%50)/40);
       if(score%25===0&&blessTimer<=0)applyBlessing();
+      // P239: 针眼竹穿过 —— 超窄缝成功通过额外+10金光
+      if(b.needle){score+=10;scoreTxt.textContent=score;floatText(rabbit.x,rabbit.y-30,'针眼 +10');shockwaves.push({x:rabbit.x,y:rabbit.y,r:RR,life:1,col:'#ffd766'});sfx.pearl();vib([30,20,60]);}
       // P238: 完美跳跃 —— 穿过时兔子越贴近缝隙中心，判定完美，奖励分+金光
       const off=Math.abs(rabbit.y-b.gapY);
       if(off<b.gap*0.16){
@@ -762,6 +767,14 @@ function draw(){
     // P219: 竹腔断口（间隙上下切口，空心竹质感）
     drawBambooCap(b.x+sx,b.w,topH);
     drawBambooCap(b.x+sx,b.w,botY);
+    // P239: 针眼竹 —— 缝隙上下缘描金光，提示高难度高回报
+    if(b.needle){
+      ctx.save();ctx.globalAlpha=.55+.35*Math.sin(frame*.15);
+      ctx.strokeStyle='#ffd766';ctx.lineWidth=2.5;ctx.shadowColor='#ffcf4a';ctx.shadowBlur=8;
+      ctx.beginPath();ctx.moveTo(b.x+sx,topH);ctx.lineTo(b.x+sx+b.w,topH);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x+sx,botY);ctx.lineTo(b.x+sx+b.w,botY);ctx.stroke();
+      ctx.restore();
+    }
     // 双间隙标识 (新 v1.5)
     if(b.twin){
       ctx.strokeStyle='rgba(255,120,60,.4)';ctx.lineWidth=2;ctx.setLineDash([4,4]);
@@ -783,6 +796,15 @@ function draw(){
   // 道具 (P218: 质感升级)
   pickups.forEach(p=>{
     const bob=Math.sin(p.ph)*3;
+    // P239: 吸附光环 —— 道具靠近兔子时亮起吸引光环，提示可拾取
+    const pdx=p.x-rabbit.x,pdy=p.y-rabbit.y,pd2=pdx*pdx+pdy*pdy;
+    if(st==='play'&&pd2<90*90){
+      const prox=1-Math.sqrt(pd2)/90;
+      ctx.save();ctx.globalAlpha=prox*.5;
+      ctx.strokeStyle=p.kind==='coin'?'#ffd766':p.kind==='pearl'?'#8a94a8':p.kind==='shield'?'#d85b45':p.kind==='radish'?'#e8553a':'#5ab86a';
+      ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(p.x,p.y+bob,12+prox*6+Math.sin(frame*.2)*1.5,0,6.2832);ctx.stroke();
+      ctx.restore();
+    }
     if(p.kind==='coin'){
       // 立体铜钱：外环+内方孔+高光
       const cg=ctx.createRadialGradient(p.x-3,p.y+bob-3,1,p.x,p.y+bob,10);

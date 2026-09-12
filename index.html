@@ -150,7 +150,7 @@ const SEASONS=[
 ];
 let season=0,blessTimer=0;
 let seasonSplash=null; // P240: 季节转场水墨横扫
-const G=0.47,JUMP=-8.4,RR=13; // P223: 提速同步上调重力/跳力，保持跳跃手感一致
+const G=0.40,JUMP=-9.0,RR=13; // P246: 减重力+提跳力——上升更轻快(顶点94px/22帧)，解决"跳跃沉重"
 const SKILL_MAX=100;
 function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(_){}}
 
@@ -221,23 +221,21 @@ function spawnBamboo(){
     for(let i=0;i<5;i++)lanterns.push({x:W+20+Math.random()*80,y:H+10+Math.random()*60,ph:Math.random()*6.28});
   }
   if(st==='play'){
-    // P243: 道具稀疏化 — 取决于难度，最大每3根竹1次道具，且道具不绑在必经线上
-    if(score>=3 && (score%3===0 || Math.random()<0.25)){
-      const stalk=bamboo[bamboo.length-1];
-      const spacing = Math.max(20, stalk.gap/2-12);
-      const put=(off,kind)=>pickups.push({x:stalk.x+stalk.w/2,y:stalk.gapY+off,off:off,ref:stalk,kind,ph:Math.random()*6});
-      // 难度曲线：低分送必备护盾/药草，高分仅金币/珍珠，杜绝必靠道具
-      let pool=[];
-      if(score<12) pool=['shield','herb'];
-      else if(score<30) pool=['coin','pearl'];
-      else pool=['coin'];
-      const kind=pool[Math.floor(Math.random()*pool.length)];
-      const off=Math.random()<0.5?spacing:-spacing;
-      put(off,kind);
-      // P243: 偶发"道具缺口"——每5根必有一个无道具的绝对技巧墙
-      if(score>0 && score%5===0){
-        bamboo[bamboo.length-1].noItem=true;
-      }
+    // P246: 恢复经典三连铜钱 + 道具安全钳制（绝不贴墙，全部钳在缝中心±30%内）
+    const stalk=bamboo[bamboo.length-1];
+    const safe=Math.max(14, stalk.gap*.30);   // 安全半径：缝中心上下30%，窄缝也拿得到
+    const put=(off,kind)=>pickups.push({x:stalk.x+stalk.w/2,y:stalk.gapY+Math.max(-safe,Math.min(safe,off)),off:off,ref:stalk,kind,ph:Math.random()*6});
+    if(techWall){/* 技巧墙=零道具，纯技术 */}
+    else if(stalk.twin||stalk.needle){/* 双连/针眼不摆道具，防误导 */}
+    else if(score<3){put(0,['shield','herb','radish'][score]);}
+    else if(score%3===0||Math.random()<.3){
+      // 经典三连铜钱：横排在缝中心一条线上，跳过去顺路全收
+      put(0,'coin');
+      pickups.push({x:stalk.x+stalk.w/2-26,y:stalk.gapY,off:0,ref:stalk,kind:'coin',ph:Math.random()*6});
+      pickups.push({x:stalk.x+stalk.w/2+26,y:stalk.gapY,off:0,ref:stalk,kind:'coin',ph:Math.random()*6});
+    } else if(Math.random()<.4){
+      const r=Math.random();
+      put(0,r<.5?'shield':r<.8?'herb':'radish');
     }
   }
 }
@@ -1220,19 +1218,14 @@ function jump(){
   if(st!=='play')return;
   if(skillMeter>=SKILL_MAX&&burstTimer<=0){activateBurst();return;}
   const airTime=frame-(rabbit.lastJumpFrame||-999);
-  if(airTime<5)return;
+  // P246: 纯flappy手感——每次点击满跳、零冷却（旧5帧冷却+85折弱跳是"沉重感"来源）
   rabbit.lastJumpFrame=frame;
-  rabbit.justJumped=true;               // P242: 两帧内显影
-  setTimeout(()=>rabbit.justJumped=false,100);
-  if(airTime<14){
-    rabbit.v=JUMP*.85;rabbit.isAirJump=true;
-    setTimeout(()=>rabbit.isAirJump=false,120);
-    puff(rabbit.x-8,rabbit.y+8,'#8a7f70',5);
-    ripple(rabbit.x,rabbit.y+6,'rgba(150,140,125,.45)');
-  } else {
-    rabbit.v=JUMP;rabbit.isPerfectJump=false;
-  }
-  sfx.jump();puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);
+  rabbit.v=JUMP;
+  rabbit.justJumped=true;
+  if(airTime<16){rabbit.isAirJump=true;setTimeout(()=>rabbit.isAirJump=false,120);}
+  sfx.jump();
+  puff(rabbit.x-10,rabbit.y+6,'#f5f0e8',3);
+  if(rabbit.isAirJump){puff(rabbit.x-8,rabbit.y+8,'#8a7f70',5);ripple(rabbit.x,rabbit.y+6,'rgba(150,140,125,.45)');}
 }
 function tap(e){
   if(st==='pause'){resume();e&&e.preventDefault&&e.preventDefault();return;}

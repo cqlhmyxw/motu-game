@@ -347,7 +347,7 @@ function update(dt,now){
       }
       else if(p.kind==='pearl'){score+=5;comboN+=3;comboTimer=120;scoreTxt.textContent=score;sfx.pearl();vib(25);puff(p.x,p.y,'#4a5568',12);floatText(p.x,p.y-14,'+5');__eyeBoost=45;showCombo('墨珠 +5');addSkill(8);}
       else if(p.kind==='shield'){rabbit.shield=Math.min(3,rabbit.shield+1);sfx.pearl();vib(30);puff(p.x,p.y,'#9a3a2a',12);showCombo('符纸护身·'+rabbit.shield+'层');addSkill(5);}
-      else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=90;addSkill(5);}
+      else if(p.kind==='radish'){sfx.jump();vib(20);puff(p.x,p.y,'#e8553a',10);showCombo('萝卜冲刺');speedBurst=60;addSkill(5);}
       else if(p.kind==='herb'){sfx.herb();vib(25);puff(p.x,p.y,'#5ab86a',12);showCombo('灵草蓄气');addSkill(20);rabbit.shield=Math.max(rabbit.shield,1);invincible=120;}
       if(p.ref)p.ref.shake=9;   // P237: 砍竹抖动
       pickups.splice(i,1);continue;
@@ -1248,7 +1248,7 @@ let lastTapT=0;
 function tryDoubleTap(){
   const now=performance.now();
   if(now-lastTapT<400&&st==='play'&&speedBurst<=0){
-    speedBurst=180;showCombo('⚡ 疾 走 ⚡');sfx.burst();vib([20,20,40]);
+    speedBurst=90;showCombo('⚡ 疾 走 ⚡');sfx.burst();vib([20,20,40]);
     for(let i=0;i<10;i++)puff(rabbit.x-14,rabbit.y+(Math.random()*30-15),'#e8e0c8',1);
     lastTapT=0;return true;
   }
